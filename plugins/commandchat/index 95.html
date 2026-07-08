@@ -17,67 +17,95 @@
             width: 100vw;
             display: flex;
             position: relative;
+            padding: 4px; 
         }
 
         .window {
             width: 100%;
-            height: 100vh;
-            background-color: #0c0c0c;
+            height: 100%;
+            background-color: #c0c0c0;
             display: flex;
             flex-direction: column;
-            border: none;
-            box-shadow: none;
+            border: 3px solid;
+            border-color: #ffffff #0a0a0a #0a0a0a #ffffff; 
+            box-shadow: inset 1px 1px 0px #dfdfdf, inset -1px -1px 0px #808080;
             border-radius: 0;
             z-index: 1;
             position: relative;
+            padding: 2px;
         }
 
         .title-bar {
-            background-color: #202020;
-            height: 38px;
+            background: linear-gradient(90deg, #000080, #1046d0);
+            height: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-left: 14px;
+            padding-left: 6px;
+            padding-right: 4px;
             user-select: none;
-            border-bottom: 1px solid #333333;
             flex-shrink: 0;
         }
+        
         .title-text {
-            color: #cccccc;
-            font-size: 14px;
+            color: #ffffff;
+            font-family: "MS Sans Serif", Arial, sans-serif;
+            font-size: 13px;
+            font-weight: bold;
         }
+        
         .window-controls {
             display: flex;
             height: 100%;
+            align-items: center;
+            gap: 2px;
         }
+        
         .control-btn {
-            width: 46px;
-            height: 100%;
+            width: 16px;
+            height: 16px;
+            background-color: #c0c0c0;
+            border: 2px solid;
+            border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
+            color: #000000;
+            font-family: "MS Sans Serif", Arial, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
             display: flex;
             justify-content: center;
             align-items: center;
-            color: #ffffff;
-            font-size: 14px;
+            cursor: pointer;
+            padding-bottom: 2px; 
         }
-        .control-btn.close:hover {
-            background-color: #e81123;
-            color: #ffffff;
+        
+        .control-btn.close {
+            font-size: 11px;
+            padding-bottom: 0px;
         }
-        .control-btn:not(.close):hover {
-            background-color: #333333;
+        
+        .control-btn:active {
+            border-color: #0a0a0a #ffffff #ffffff #0a0a0a;
+            padding-top: 2px;
+            padding-left: 2px;
+        }
+        
+        .control-btn.close:hover, .control-btn:not(.close):hover {
+            background-color: #c0c0c0;
+            color: #000000;
         }
 
         .terminal-container {
             position: relative;
             flex-grow: 1;
             overflow: hidden;
-            background-color: #0c0c0c;
+            background-color: #000000; 
+            margin: 4px;
+            border: 3px solid;
+            border-color: #808080 #ffffff #ffffff #808080; 
         }
 
         .terminal-body {
-            padding: 20px;
-            padding-top: 0px;
+            padding: 10px;
             height: 100%;
             overflow-y: auto;
 
@@ -89,24 +117,24 @@
         .line {
             word-wrap: break-word;
             color: #ffffff; 
-            font-size: 24px; 
+            font-size: 18px;
             margin-bottom: 4px;
             position: relative;
         }
 
-        .prefix { color: #cccccc; } 
-        .user { color: #00ff00; font-weight: bold; } 
-        .text { color: #cccccc; }
-        .system-log { color: #cccccc; } 
-        .system-error { color: #ff2222; font-weight: bold; }
+        .prefix { color: #ffffff; } 
+        .user { color: #00ff00; font-weight: normal; } 
+        .text { color: #ffffff; }
+        .system-log { color: #ffffff; } 
+        .system-error { color: #ff5555; }
 
         .cursor {
             display: inline-block;
-            width: 12px;
-            height: 24px;
+            width: 10px;
+            height: 18px;
             background-color: #ffffff;
-            margin-left: 4px;
-            vertical-align: middle;
+            margin-left: 2px;
+            vertical-align: bottom;
             animation: blink 1s infinite;
         }
         @keyframes blink {
@@ -116,10 +144,10 @@
 
         #matrixCanvas {
             position: absolute;
-            top: 38px;
+            top: 28px;
             left: 0;
             width: 100%;
-            height: calc(100% - 38px);
+            height: calc(100% - 28px);
             z-index: 10;
             pointer-events: none; 
             opacity: 0;
@@ -147,8 +175,8 @@
     <div class="title-bar">
         <div class="title-text">C:\Windows\system32\cmd.exe</div>
         <div class="window-controls">
-            <div class="control-btn">─</div>
-            <div class="control-btn">❑</div>
+            <div class="control-btn">_</div>
+            <div class="control-btn">🗖</div>
             <div class="control-btn close">✕</div>
         </div>
     </div>

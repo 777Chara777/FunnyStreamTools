@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Linux Kali Terminal (SSH Interactive)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: transparent; 
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            position: relative;
+        }
+
+        .window {
+            width: 100%;
+            height: 100vh;
+            background-color: #0d1117; 
+            display: flex;
+            flex-direction: column;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            z-index: 1;
+            position: relative;
+        }
+
+        .title-bar {
+            background-color: #161b22;
+            height: 38px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 14px;
+            user-select: none;
+            border-bottom: 1px solid #21262d;
+            flex-shrink: 0;
+        }
+        .title-text {
+            color: #8b949e;
+            font-size: 14px;
+        }
+        .window-controls {
+            display: flex;
+            height: 100%;
+        }
+        .control-btn {
+            width: 46px;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        .control-btn.close:hover {
+            background-color: #f85149;
+            color: #ffffff;
+        }
+        .control-btn:not(.close):hover {
+            background-color: #30363d;
+        }
+
+        .terminal-container {
+            position: relative;
+            flex-grow: 1;
+            overflow: hidden;
+            background-color: #0d1117;
+        }
+
+        .terminal-body {
+            padding: 20px;
+            padding-top: 5px;
+            height: 100%;
+            overflow-y: auto;
+
+            &::-webkit-scrollbar { display: none; }
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .line {
+            word-wrap: break-word;
+            color: #c9d1d9; 
+            font-size: 22px; 
+            margin-bottom: 6px;
+            position: relative;
+            /* white-space: pre-wrap; */
+        }
+
+        .prompt-at { color: #ffffff; }
+        .prompt-host { color: #2ea043; font-weight: bold; } 
+        .prompt-dir { color: #58a6ff; } 
+        .text { color: #c9d1d9; }
+        .system-log { color: #8b949e; } 
+        .system-error { color: #f85149; font-weight: bold; }
+
+        .cursor {
+            display: inline-block;
+            width: 12px;
+            height: 22px;
+            background-color: #c9d1d9;
+            margin-left: 4px;
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 49% { background-color: #c9d1d9; }
+            50%, 100% { background-color: transparent; }
+        }
+
+        #matrixCanvas {
+            position: absolute;
+            top: 38px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 38px);
+            z-index: 10;
+            pointer-events: none; 
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .emote {
+            height: 1.2em; 
+            vertical-align: middle;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<div class="window">
+    <div class="title-bar">
+        <div class="title-text">twitch_user@kali: ~ (ssh)</div>
+        <div class="window-controls">
+            <div class="control-btn">─</div>
+            <div class="control-btn">❑</div>
+            <div class="control-btn close">✕</div>
+        </div>
+    </div>
+
+    <div class="terminal-container">
+        <div class="terminal-body" id="terminal">
+            <div class="line system-log" style="margin-bottom: 20px;">Welcome to Kali GNU/Linux 2026.2<br> * Documentation: https://www.kali.org<br> * SSH Session initialized active context.<br></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const terminal = document.getElementById('terminal');
+    const matrixCanvas = document.getElementById('matrixCanvas');
+    const ctx = matrixCanvas.getContext('2d');
+    const MAX_LINES = 50; 
+    let matrixInterval = null;
+    let isMatrixRunning = false;
+    let originalTerminalHTML = "";
+
+    const block = ['ls', 'cd', 'rm', 'clear', 'top', 'neofetch', 'sudo', 'matrix', 'ping'];
+    const alphabet = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890*#$@%&'.split('');
+
+    function playTerminalBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.04);
+            oscillator.stop(audioCtx.currentTime + 0.04);
+        } catch (e) {}
+    }
+
+    function typeEffect(element, text, speed, callback) {
+        let i = 0;
+        element.textContent = "";
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                setTimeout(type, speed);
+            } else if (callback) {
+                callback();
+            }
+        }
+        type();
+    }
+
+    function updateCursorPosition() {
+        const oldCursors = terminal.querySelectorAll('.cursor');
+        oldCursors.forEach(c => c.remove());
+
+        const lines = terminal.getElementsByClassName('line');
+        if (lines.length === 0) return;
+        
+        const lastLine = lines[lines.length - 1];
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        lastLine.appendChild(cursor);
+
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function cleanupOldLines() {
+        const lines = terminal.getElementsByClassName('line');
+        while (lines.length > MAX_LINES) {
+            terminal.removeChild(lines[0]);
+        }
+    }
+
+    function printCommandOutput(text, color = '#c9d1d9') {
+        const line = document.createElement('div');
+        line.className = 'line system-log';
+        line.style.color = color;
+        line.innerHTML = text;
+        
+        terminal.appendChild(line);
+        cleanupOldLines();
+        updateCursorPosition();
+    }
+
+    function runPingProcess() {
+        printCommandOutput('PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.');
+        let count = 0;
+        const pingInterval = setInterval(() => {
+            count++;
+            playTerminalBeep();
+            printCommandOutput(`64 bytes from 127.0.0.1: icmp_seq=${count} ttl=64 time=0.032 ms`);
+            if (count === 4) {
+                clearInterval(pingInterval);
+                setTimeout(() => {
+                    printCommandOutput(`--- 127.0.0.1 ping statistics ---<br>4 packets transmitted, 4 received, 0% packet loss, time 3042ms<br>rtt min/avg/max/mdev = 0.032/0.035/0.041/0.004 ms<br>`); 
+                }, 500);
+            }
+        }, 1000);
+    }
+
+    function runTopProcess() {
+        printCommandOutput('Loading active processes...');
+        setTimeout(() => {
+            const cpuUsage = (Math.random() * 25 + 5).toFixed(1);
+            const ramUsage = (Math.random() * 4 + 8).toFixed(2);
+            const topData = `
+<b>top - 14:47:11 up 42 days,  3:14,  1 user,  load average: 0.24, 0.15, 0.08</b>
+Tasks: <b>142 total</b>,   1 running, 141 sleeping,   0 stopped,   0 zombie
+%Cpu(s): <b>${cpuUsage} us</b>,  2.1 sy,  0.0 ni, 92.4 id,  0.0 wa,  0.0 hi,  0.1 si
+MiB Mem : <b>32768.0 total</b>,  12450.2 free,  <b>${ramUsage} GB used</b>,  8412.5 buff/cache
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+ 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.7).toFixed(1)}   2.8   8:42.14 OBS.exe
+ 1240 bot_user  20   0  842104  64120  24104 S   0.7   0.2   1:14.05 TwitchBot.exe
+  890 kali      20   0  114500  12410   4102 R   0.3   0.0   0:02.11 top`;
+            printCommandOutput(topData, '#58a6ff');
+        }, 800);
+    }
+
+    function runNeofetch() {
+        const neofetchData = `
+<span style="color: #8b2500; font-weight: bold;">       .---.        </span>   <b>streamer</b>@<b>kali-linux</b>
+<span style="color: #8b2500; font-weight: bold;">      /     \\       </span>   -------------------
+<span style="color: #8b2500; font-weight: bold;">      \\_.._./       </span>   <b>OS</b>: Kali GNU/Linux 2026.2 x86_64
+<span style="color: #8b2500; font-weight: bold;">    .-'     '-.     </span>   <b>Host</b>: StreamStation PC VR-Ready
+<span style="color: #8b2500; font-weight: bold;">   /           \\    </span>   <b>Kernel</b>: 6.8.0-kali1-amd64
+<span style="color: #8b2500; font-weight: bold;">  |   I  AM     |   </span>   <b>Uptime</b>: 42 days, 3 hours, 14 mins
+<span style="color: #8b2500; font-weight: bold;">  |   WATCHING  |   </span>   <b>Shell</b>: bash 5.2.15
+<span style="color: #8b2500; font-weight: bold;">   \\           /    </span>   <b>CPU</b>: Intel i9-Virtual Context Core (32) @ 5.20GHz
+<span style="color: #8b2500; font-weight: bold;">    '-._____.-'     </span>   <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
+<span style="color: #8b2500; font-weight: bold;">       /   \\        </span>   <b>Memory</b>: 14210MiB / 32768MiB
+`;
+        printCommandOutput(neofetchData);
+    }
+
+    function clearConsoleLog() {
+        terminal.innerHTML = '';
+        updateCursorPosition();
+    }
+
+    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+    ws.onmessage = function(event) {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.topic && packet.topic.endsWith(':message')) {
+            const data = packet.data;
+            const messageText = data.text.trim().toLowerCase();
+            const hasPermission = data.isMod === true; 
+
+            const words = data.text.trim().split(/\s+/);
+            const firstWord = words[0].toLowerCase();
+            const isSudo = firstWord === 'sudo';
+ 
+            let commandToCheck = firstWord;
+            if (isSudo && words.length > 1) {
+                commandToCheck = words[1].toLowerCase();
+            }
+
+            playTerminalBeep();
+
+            if (messageText === 'clear') {
+                clearConsoleLog();
+                return;
+            }
+
+            const line = document.createElement('div');
+            line.className = 'line';
+            const content = data.html_text || data.text; 
+
+            line.innerHTML = `
+                <span class="prompt-user" style="color: ${data.color || '#00ff00'}">${data.user}</span><span class="prompt-at">@</span><span class="prompt-host">kali</span><span class="prompt-at">:</span><span class="prompt-dir">~$</span> 
+                <span class="text">${content}</span>
+            `;
+
+            terminal.appendChild(line);
+            cleanupOldLines();
+            updateCursorPosition();
+
+            const textSpan = line.querySelector('.text');
+            typeEffect(textSpan, data.text, 10, () => {
+                textSpan.innerHTML = content;
+                updateCursorPosition();
+
+                if (messageText.includes('rm -rf')) {
+                    printCommandOutput(`<span class="system-error">rm: cannot remove '/': Permission denied</span><br><span style="color: #ffaa00">Nice try! Safe mode prevents complete destruction. 😉</span>`);
+                    return;
+                }
+
+                if (messageText === 'ls -la' || messageText === 'ls') {
+                    printCommandOutput(`total 42<br>drwxr-xr-x  2 root root 4096 Jul  8 14:24 .<br>drwxr-xr-x 22 root root 4096 Jul  8 14:24 ..<br>-rw-r--r--  1 root root 1048 stream_data.db<br>drwxr-xr-x  2 root root 4096 Jul  8 14:24 logs<br>-rwxr-xr-x  1 root root  890 core_engine.sh`);
+                    return;
+                }
+
+                if (hasPermission && messageText === 'ping') {
+                    runPingProcess();
+                    return;
+                }
+
+                if (messageText === 'top') {
+                    runTopProcess();
+                    return;
+                }
+
+                if (messageText === 'neofetch') {
+                    runNeofetch();
+                    return;
+                }
+
+                const linuxBlock = ['dir', 'ipconfig', 'cls', 'systeminfo', 'mkdir'];
+                if (linuxBlock.includes(firstWord) || (block.includes(commandToCheck) && !hasPermission)) {
+                    printCommandOutput(`<span class="system-error">bash: ${words[0]}: command not found</span>`);
+                }
+            });
+        }
+    };
+
+    updateCursorPosition();
+</script>
+</body>
+</html>

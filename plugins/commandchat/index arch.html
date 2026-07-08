@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Arch Linux Terminal (SSH Interactive)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: transparent; 
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            position: relative;
+        }
+
+        .window {
+            width: 100%;
+            height: 100vh;
+            background-color: #0c0f12;
+            display: flex;
+            flex-direction: column;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            z-index: 1;
+            position: relative;
+        }
+
+        .title-bar {
+            background-color: #171a1f;
+            height: 38px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 14px;
+            user-select: none;
+            border-bottom: 1px solid #22272e;
+            flex-shrink: 0;
+        }
+        .title-text {
+            color: #79828c;
+            font-size: 14px;
+        }
+        .window-controls {
+            display: flex;
+            height: 100%;
+        }
+        .control-btn {
+            width: 46px;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        .control-btn.close:hover {
+            background-color: #ff5555;
+            color: #ffffff;
+        }
+        .control-btn:not(.close):hover {
+            background-color: #2b3038;
+        }
+
+        .terminal-container {
+            position: relative;
+            flex-grow: 1;
+            overflow: hidden;
+            background-color: #0c0f12;
+        }
+
+        .terminal-body {
+            padding: 20px;
+            padding-top: 5px;
+            height: 100%;
+            overflow-y: auto;
+
+            &::-webkit-scrollbar { display: none; }
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .line {
+            word-wrap: break-word;
+            color: #c5cdd8; 
+            font-size: 22px; 
+            margin-bottom: 6px;
+            position: relative;
+            /* white-space: pre-wrap; */
+        }
+
+        .prompt-bracket { color: #4c566a; }
+        .prompt-at { color: #81a1c1; }
+        .prompt-host { color: #1793d1; font-weight: bold; }
+        .prompt-dir { color: #e5e9f0; }
+        .text { color: #c5cdd8; }
+        .system-log { color: #79828c; } 
+        .system-error { color: #ff5555; font-weight: bold; }
+
+        .cursor {
+            display: inline-block;
+            width: 12px;
+            height: 22px;
+            background-color: #1793d1; 
+            margin-left: 4px;
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 49% { background-color: #1793d1; }
+            50%, 100% { background-color: transparent; }
+        }
+
+        .emote {
+            height: 1.2em; 
+            vertical-align: middle;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="window">
+    <div class="title-bar">
+        <div class="title-text">twitch_user@archlinux: ~ (tty1)</div>
+        <div class="window-controls">
+            <div class="control-btn">─</div>
+            <div class="control-btn">❑</div>
+            <div class="control-btn close">✕</div>
+        </div>
+    </div>
+
+    <div class="terminal-container">
+        <div class="terminal-body" id="terminal">
+            <div class="line system-log" style="margin-bottom: 20px;">Arch Linux 2026.07.08 (tty1)<br>Welcome to Arch Linux! (I use Arch btw)<br>Type 'pacman -Syu' or 'neofetch' to begin.<br></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const terminal = document.getElementById('terminal');
+    const MAX_LINES = 50; 
+    let isShowing = false;
+
+    const block = ['ls', 'cd', 'rm', 'clear', 'top', 'neofetch', 'sudo', 'ping', 'pacman', 'yay'];
+
+    function playTerminalBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(650, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.04);
+            oscillator.stop(audioCtx.currentTime + 0.04);
+        } catch (e) {}
+    }
+
+    function typeEffect(element, text, speed, callback) {
+        let i = 0;
+        element.textContent = "";
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                setTimeout(type, speed);
+            } else if (callback) {
+                callback();
+            }
+        }
+        type();
+    }
+
+    function updateCursorPosition() {
+        const oldCursors = terminal.querySelectorAll('.cursor');
+        oldCursors.forEach(c => c.remove());
+
+        const lines = terminal.getElementsByClassName('line');
+        if (lines.length === 0) return;
+        
+        const lastLine = lines[lines.length - 1];
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        lastLine.appendChild(cursor);
+
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function cleanupOldLines() {
+        const lines = terminal.getElementsByClassName('line');
+        while (lines.length > MAX_LINES) {
+            terminal.removeChild(lines[0]);
+        }
+    }
+
+    function printCommandOutput(text, color = '#c5cdd8') {
+        const line = document.createElement('div');
+        line.className = 'line system-log';
+        line.style.color = color;
+        line.innerHTML = text;
+        
+        terminal.appendChild(line);
+        cleanupOldLines();
+        updateCursorPosition();
+    }
+
+    function runPingProcess() {
+        printCommandOutput('PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.');
+        let count = 0;
+        const pingInterval = setInterval(() => {
+            count++;
+            playTerminalBeep();
+            printCommandOutput(`64 bytes from 127.0.0.1: icmp_seq=${count} ttl=64 time=0.018 ms`);
+            if (count === 4) {
+                clearInterval(pingInterval);
+                setTimeout(() => {
+                    printCommandOutput(`--- 127.0.0.1 ping statistics ---<br>4 packets transmitted, 4 received, 0% packet loss, time 2999ms<br>rtt min/avg/max/mdev = 0.018/0.022/0.028/0.003 ms<br>`); 
+                }, 500);
+            }
+        }, 1000);
+    }
+
+    function runTopProcess() {
+        printCommandOutput('Reading /proc filesystem...');
+        setTimeout(() => {
+            const cpuUsage = (Math.random() * 15 + 2).toFixed(1);
+            const ramUsage = (Math.random() * 3 + 4).toFixed(2);
+            const topData = `
+<b>top - 15:42:01 up 12 days, 22:11,  1 user,  load average: 0.11, 0.14, 0.05</b>
+Tasks: <b>210 total</b>,   1 running, 209 sleeping,   0 stopped,   0 zombie
+%Cpu(s): <b>${cpuUsage} us</b>,  1.0 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi
+MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  9120.4 buff/cache
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+ 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.8).toFixed(1)}   2.8   4:11.23 OBS.exe
+ 1240 bot_user  20   0  842104  64120  24104 S   0.3   0.2   0:45.10 TwitchBot.exe
+  915 arch_usr  20   0  112400  10120   3900 R   0.2   0.0   0:01.05 top`;
+            printCommandOutput(topData, '#81a1c1');
+        }, 800);
+    }
+
+    function runNeofetch() {
+        const neofetchData = `
+<span style="color: #1793d1; font-weight: bold;">       /\\         </span>   <b>streamer</b>@<b>archlinux</b>
+<span style="color: #1793d1; font-weight: bold;">      /  \\        </span>   -------------------
+<span style="color: #1793d1; font-weight: bold;">     /\\   \\       </span>   <b>OS</b>: Arch Linux x86_64
+<span style="color: #1793d1; font-weight: bold;">    /  __  \\      </span>   <b>Host</b>: Custom Stream-Rig
+<span style="color: #1793d1; font-weight: bold;">   /  (  )  \\     </span>   <b>Kernel</b>: 6.9.5-arch1-1
+<span style="color: #1793d1; font-weight: bold;">  /  _    _  \\    </span>   <b>Uptime</b>: 12 days, 22 hours, 11 mins
+<span style="color: #1793d1; font-weight: bold;"> /  (______)  \\   </span>   <b>Shell</b>: bash 5.2.26
+<span style="color: #1793d1; font-weight: bold;">/              \\  </span>   <b>CPU</b>: AMD Ryzen 9 7950X3D (32) @ 5.70GHz
+                     <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
+                     <b>Memory</b>: 6114MiB / 32768MiB
+`;
+        printCommandOutput(neofetchData);
+    }
+
+    function runPacmanSyu() {
+        printCommandOutput(':: Synchronizing package databases...<br> core is up to date<br> extra is up to date<br>:: Starting full system upgrade...<br> there is nothing to do');
+    }
+
+    function clearConsoleLog() {
+        terminal.innerHTML = '';
+        updateCursorPosition();
+    }
+
+    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+    ws.onmessage = function(event) {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.topic && packet.topic.endsWith(':message')) {
+            const data = packet.data;
+            const messageText = data.text.trim().toLowerCase();
+            const hasPermission = data.isMod === true; 
+
+            const words = data.text.trim().split(/\s+/);
+            const firstWord = words[0].toLowerCase();
+            const isSudo = firstWord === 'sudo';
+            
+            let commandToCheck = firstWord;
+            if (isSudo && words.length > 1) {
+                commandToCheck = words[1].toLowerCase();
+            }
+
+            playTerminalBeep();
+
+            if (messageText === 'clear') {
+                clearConsoleLog();
+                return;
+            }
+
+            const line = document.createElement('div');
+            line.className = 'line';
+            const content = data.html_text || data.text; 
+
+            line.innerHTML = `
+                <span class="prompt-bracket">[</span><span class="prompt-user" style="color: ${data.color || '#1793d1'}">${data.user}</span><span class="prompt-at">@</span><span class="prompt-host">archlinux</span> <span class="prompt-dir">~</span><span class="prompt-bracket">]$</span> 
+                <span class="text">${content}</span>
+            `;
+
+            terminal.appendChild(line);
+            cleanupOldLines();
+            updateCursorPosition();
+
+            const textSpan = line.querySelector('.text');
+            typeEffect(textSpan, data.text, 10, () => {
+                textSpan.innerHTML = content;
+                updateCursorPosition();
+
+                if (messageText.includes('rm -rf')) {
+                    printCommandOutput(`<span class="system-error">rm: cannot remove '/': Permission denied</span><br><span style="color: #1793d1">Btw, nice try. System safely protected! ⚡</span>`);
+                    return;
+                }
+
+                if (messageText === 'ls -la' || messageText === 'ls') {
+                    printCommandOutput(`total 24<br>drwxr-xr-x  3 arch arch 4096 Jul  8 15:00 .<br>drwxr-xr-x 19 root root 4096 Jul  8 15:00 ..<br>-rw-r--r--  1 arch arch 8192 stream_data.db<br>drwxr-xr-x  2 arch arch 4096 Jul  8 15:00 logs`);
+                    return;
+                }
+
+                if (hasPermission && messageText === 'ping') {
+                    runPingProcess();
+                    return;
+                }
+                if (messageText === 'top') {
+                    runTopProcess();
+                    return;
+                }
+
+                if (messageText === 'neofetch') {
+                    runNeofetch();
+                    return;
+                }
+
+                if (messageText === 'pacman -syu' || messageText === 'pacman') {
+                    runPacmanSyu();
+                    return;
+                }
+
+                const winBlock = ['dir', 'ipconfig', 'cls', 'systeminfo', 'mkdir'];
+                if (winBlock.includes(firstWord) || (block.includes(commandToCheck) && !hasPermission)) {
+                    printCommandOutput(`<span class="system-error">bash: ${words[0]}: command not found</span>`);
+                }
+            });
+        }
+    };
+
+    updateCursorPosition();
+</script>
+</body>
+</html>

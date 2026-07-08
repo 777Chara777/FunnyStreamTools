@@ -11,3 +11,4 @@ wheels/
 .env
 token_*.json
 trash/
+test.py

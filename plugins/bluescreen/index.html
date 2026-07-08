@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSOD Widget</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: transparent;  
+            overflow: hidden;
+            font-family: "Segoe UI", "Segoe UI Semilight", "Segoe UI Light", sans-serif;
+            user-select: none;
+        }
+
+        .bsod-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #0078d7; 
+            color: white;
+            display: flex;
+            align-items: flex-start;
+            padding-left: 10%;
+            padding-top: 10vh;
+            z-index: 9999;
+            
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.0s ease-in-out; 
+        }
+
+        .bsod-container.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .bsod-content {
+            max-width: 850px;
+        }
+
+        .smiley {
+            font-size: 10rem;
+            line-height: 1;
+            margin-bottom: 25px;
+        }
+
+        .message {
+            font-size: 24px;
+            line-height: 1.35;
+            margin-bottom: 25px;
+            font-weight: 300;
+        }
+
+        .percentage {
+            font-size: 24px;
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+
+        .qr-section {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .qr-code {
+            width: 110px;
+            height: 110px;
+        }
+
+        .qr-text {
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 500px;
+        }
+
+        .stop-code-info {
+            margin-top: 15px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="bsod-container" id="bsodWidget">
+    <div class="bsod-content">
+        <div class="smiley">:(</div>
+        <p class="message">На вашем ПК возникла проблема, и его необходимо перезагрузить. Мы лишь собираем некоторые сведения об ошибке, а затем будет выполнена перезагрузка.</p>
+        <p class="percentage"><span>100</span>% завершено</p>
+        
+        <div class="qr-section">
+            <img src="https://www.whitescreen.online/image/prank/death-10-qr-code.png" class="qr-code" alt="QR">
+            <div class="qr-text">
+                <p>Дополнительные сведения об этой проблеме и возможных способах ее решения см. здесь: https://www.windows.com/stopcode</p>
+                <p class="stop-code-info">При обращении в службу поддержки предоставьте следующие данные:<br>Код остановки: TWITCH_CHAT_BOOM</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const bsodWidget = document.getElementById('bsodWidget');
+    let isShowing = false;
+
+    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+    ws.onmessage = function(event) {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.bluescreen === true) {
+            triggerBlueScreen();
+        }
+    };
+
+    function triggerBlueScreen() {
+        if (isShowing) return; 
+        isShowing = true;
+
+        bsodWidget.classList.add('active');
+
+        setTimeout(() => {
+            bsodWidget.classList.remove('active');
+            isShowing = false;
+        }, 10000);
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSOD Widget Windows 95</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: transparent; 
+            overflow: hidden;
+            font-family: "Courier New", Courier, monospace; 
+            user-select: none;
+        }
+
+        .bsod-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #0000aa; 
+            color: #aaaaaa; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.0s ease-in-out;
+        }
+
+        .bsod-container.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .bsod-content {
+            max-width: 720px;
+            width: 90%;
+            text-align: left;
+        }
+
+        .title-badge {
+            background-color: #aaaaaa;
+            color: #0000aa;
+            display: inline-block;
+            padding: 0px 10px;
+            margin: 0 auto 30px auto;
+            font-weight: bold;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .title-wrapper {
+            text-align: center;
+            width: 100%;
+        }
+
+        .message {
+            font-size: 18px;
+            line-height: 1.4;
+            margin-bottom: 25px;
+            word-wrap: break-word;
+        }
+
+        .highlight {
+            color: #ffffff; 
+            font-weight: bold;
+        }
+
+        .instructions {
+            font-size: 18px;
+            line-height: 1.4;
+            margin-top: 40px;
+        }
+
+        .press-key {
+            text-align: center;
+            margin-top: 50px;
+            font-size: 18px;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="bsod-container" id="bsodWidget">
+    <div class="bsod-content">
+        <div class="title-wrapper">
+            <div class="title-badge">Windows</div>
+        </div>
+        
+        <p class="message">
+            Произошла ошибка выполнения программы по адресу <span class="highlight">0028:C0011E0F</span> в модуле <span class="highlight">VXD TWITCH_CHAT_BOOM(01)</span>. 
+            Работа приложения будет прервана.
+        </p>
+        
+        <p class="message">
+            Система нестабильна или ей не хватает ресурсов памяти.
+        </p>
+        
+        <div class="instructions">
+            * Нажмите <span class="highlight">ENTER</span>, чтобы попытаться продолжить работу.<br>
+            * Нажмите <span class="highlight">CTRL+ALT+DEL</span> для перезагрузки компьютера. При этом вы потеряете все несохраненные данные в запущенных приложениях.
+        </div>
+        
+        <p class="press-key">Нажмите любую клавишу для продолжения _</p>
+    </div>
+</div>
+
+<script>
+    const bsodWidget = document.getElementById('bsodWidget');
+    let isShowing = false;
+
+    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+    ws.onmessage = function(event) {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.bluescreen === true) {
+            triggerBlueScreen();
+        }
+    };
+
+    function triggerBlueScreen() {
+        if (isShowing) return; 
+        isShowing = true;
+
+        bsodWidget.classList.add('active');
+
+        // Исчезает через 5 секунд, как и в оригинальном скрипте
+        setTimeout(() => {
+            bsodWidget.classList.remove('active');
+            isShowing = false;
+        }, 5000);
+    }
+</script>
+</body>
+</html>
