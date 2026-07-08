@@ -196,7 +196,7 @@
 
     <div class="terminal-container" id="termContainer">
         <div class="terminal-body" id="terminal">
-            
+
         </div>
     </div>
 </div>
@@ -554,8 +554,9 @@
                         printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
                     } else if (messageText === 'tree') {
                         printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
-                    } else if (messageText === 'color' && hasPermission) {
+                    } else if ((firstWord === 'color') && hasPermission) {
                         const arg = words[1] ? words[1].toLowerCase() : '';
+                        console.log(arg)
                         
                         termContainer.className = 'terminal-container'; 
                         
