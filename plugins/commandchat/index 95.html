@@ -50,7 +50,7 @@
         .title-text {
             color: #ffffff;
             font-family: "MS Sans Serif", Arial, sans-serif;
-            font-size: 13px;
+            font-size: 18px;
             font-weight: bold;
         }
         
@@ -123,7 +123,7 @@
             word-wrap: break-word;
             color: #c0c0c0; 
             font-size: 20px;
-            line-height: 18px;
+            line-height: 20px;
             margin-bottom: 4px;
             position: relative;
         }
@@ -229,10 +229,6 @@
 
     <div class="terminal-container" id="termContainer">
         <div class="terminal-body" id="terminal">
-            <div class="line system-log" style="margin-bottom: 30px;">Microsoft(R) Windows WT(TM)<br>(c) Copyright 1985-1996 Microsoft Corp.</div>
-            <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> boot --init</div>
-            <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> connecting to CoreEngine via WebSocket...</div>
-            <div class="line system-log"><span class="prefix">C:\system&gt;</span> SUCCESS: Connected to EventBus active context.</div>
         </div>
     </div>
 </div>
@@ -246,6 +242,7 @@
     let matrixInterval = null;
     let isMatrixRunning = false;
     let originalTerminalHTML = "";
+    let ws = null; 
 
     const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'format', 'shutdown', 'exit', 'help'];
 
@@ -497,131 +494,172 @@
         updateCursorPosition();
     }
 
-    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+    function initWebSocket() {
+        ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
 
-    ws.onmessage = function(event) {
-        const packet = JSON.parse(event.data);
-        
-        if (packet.topic.endsWith(':message')) {
-            const data = packet.data;
-            const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
-            const hasPermission = data.isMod === true; 
+        ws.onmessage = function(event) {
+            const packet = JSON.parse(event.data);
+            
+            if (packet.topic.endsWith(':message')) {
+                const data = packet.data;
+                const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
+                const hasPermission = data.isMod === true; 
 
-            const words = data.text.trim().split(/\s+/);
-            const firstWord = words[0].toLowerCase();
-            playTerminalBeep();
+                const words = data.text.trim().split(/\s+/);
+                const firstWord = words[0].toLowerCase();
+                playTerminalBeep();
 
-            let isBlockedCommand = block.includes(firstWord);
+                let isBlockedCommand = block.includes(firstWord);
 
-            if (hasPermission) {
-                if (messageText === '!cls' || messageText === '!clear' || messageText === 'cls') {
-                    clearConsoleLog();
-                    return;
+                if (hasPermission) {
+                    if (messageText === '!cls' || messageText === '!clear' || messageText === 'cls') {
+                        clearConsoleLog();
+                        return;
+                    }
+                    if (messageText === 'matrix') {
+                        startMatrixEffect();
+                        return;
+                    }
                 }
-                if (messageText === 'matrix') {
-                    startMatrixEffect();
-                    return;
-                }
-            }
 
-            const line = document.createElement('div');
-            line.className = 'line';
-            const platform = data.platform || 'stream';
-            const content = data.html_text || data.text; 
+                const line = document.createElement('div');
+                line.className = 'line';
+                const platform = data.platform || 'stream';
+                const content = data.html_text || data.text; 
 
-            line.innerHTML = `
-                <span class="prefix">C:\\chat\\${platform}&gt;</span> 
-                <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
-                <span class="text">:: ${content}</span>
-            `;
-
-            if (isMatrixRunning) {
-                line.style.setProperty('color', '#00ff00', 'important');
-                const subSpans = line.querySelectorAll('span');
-                subSpans.forEach(s => s.style.setProperty('color', '#00ff00', 'important'));
-                
-                glitchElementImmediately(line);
-
-                terminal.appendChild(line);
-                cleanupOldLines();
-                updateCursorPosition();
-
-                const cleanLine = document.createElement('div');
-                cleanLine.className = 'line';
-                cleanLine.innerHTML = `
+                line.innerHTML = `
                     <span class="prefix">C:\\chat\\${platform}&gt;</span> 
                     <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
                     <span class="text">:: ${content}</span>
                 `;
-                originalTerminalHTML += cleanLine.outerHTML;
-            } else {
-                terminal.appendChild(line);
-                cleanupOldLines();
-                updateCursorPosition();
 
-                const textSpan = line.querySelector('.text');
-                typeEffect(textSpan, ":: " + data.text, 10, () => {
-                    textSpan.innerHTML = ":: " + content;
+                if (isMatrixRunning) {
+                    line.style.setProperty('color', '#00ff00', 'important');
+                    const subSpans = line.querySelectorAll('span');
+                    subSpans.forEach(s => s.style.setProperty('color', '#00ff00', 'important'));
+                    
+                    glitchElementImmediately(line);
+
+                    terminal.appendChild(line);
+                    cleanupOldLines();
                     updateCursorPosition();
 
-                    if (isBlockedCommand) {
-                        printPingRow(`'${words[0]}' is not recognized as an internal or external command,<br>operable program or batch file.`);
-                        return;
-                    }
+                    const cleanLine = document.createElement('div');
+                    cleanLine.className = 'line';
+                    cleanLine.innerHTML = `
+                        <span class="prefix">C:\\chat\\${platform}&gt;</span> 
+                        <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
+                        <span class="text">:: ${content}</span>
+                    `;
+                    originalTerminalHTML += cleanLine.outerHTML;
+                } else {
+                    terminal.appendChild(line);
+                    cleanupOldLines();
+                    updateCursorPosition();
 
-                    if (hasPermission && messageText === 'ping') {
-                        runPingProcess();
-                    }
-                });
-            }
+                    const textSpan = line.querySelector('.text');
+                    typeEffect(textSpan, ":: " + data.text, 10, () => {
+                        textSpan.innerHTML = ":: " + content;
+                        updateCursorPosition();
 
-            if (!isBlockedCommand) {
-                if (messageText === 'dir') {
-                    printPingRow('Directory of C:\\stream<br>08.07.2026  04:24    &lt;DIR&gt;          logs<br>08.07.2026  04:24    1,048,576      stream_data.db<br>1 File(s)  1,048,576 bytes');
-                } else if (messageText === 'ipconfig') {
-                    printPingRow('Ethernet adapter Ethernet:<br>   IPv4 Address. . . . . : 192.168.1.137<br>   Subnet Mask . . . . : 255.255.255.0');
-                } else if (messageText === 'systeminfo') {
-                    printPingRow('OS Name: StreamOS 2026<br>Processor: Core_i9_Virtual<br>System Uptime: 42 days');
-                } else if (messageText === 'whoami') {
-                    printPingRow('stream_user');
-                } else if (messageText === 'tasklist') {
-                    printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
-                } else if (messageText === 'tree') {
-                    printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
-                } else if (messageText === 'color' && hasPermission) {
-                    const arg = words[1] ? words[1].toLowerCase() : '';
-                    
-                    termContainer.className = 'terminal-container'; 
-                    
-                    if (arg === '') {
-                        termContainer.classList.add('cmd-color-f');
-                        printPingRow('<br>Console colors have been reset to default.');
-                    } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
-                        const bgAttr = arg.charAt(0);
-                        const textAttr = arg.charAt(1);
-                        
-                        if (bgAttr === textAttr) {
-                            printPingRow('<br>Error: Text and background colors must not be the same.');
-                        } else {
-                            termContainer.classList.add(`cmd-bg-${bgAttr}`);
-                            termContainer.classList.add(`cmd-color-${textAttr}`);
+                        if (isBlockedCommand) {
+                            printPingRow(`'${words[0]}' is not recognized as an internal or external command,<br>operable program or batch file.`);
+                            return;
                         }
-                    } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
-                        termContainer.classList.add(`cmd-bg-0`);
-                        termContainer.classList.add(`cmd-color-${arg}`);
-                    } else {
-                        printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
+
+                        if (hasPermission && messageText === 'ping') {
+                            runPingProcess();
+                        }
+                    });
+                }
+
+                if (!isBlockedCommand) {
+                    if (messageText === 'dir') {
+                        printPingRow('Directory of C:\\stream<br>08.07.2026  04:24    &lt;DIR&gt;          logs<br>08.07.2026  04:24    1,048,576      stream_data.db<br>1 File(s)  1,048,576 bytes');
+                    } else if (messageText === 'ipconfig') {
+                        printPingRow('Ethernet adapter Ethernet:<br>   IPv4 Address. . . . . : 192.168.1.137<br>   Subnet Mask . . . . : 255.255.255.0');
+                    } else if (messageText === 'systeminfo') {
+                        printPingRow('OS Name: StreamOS 2026<br>Processor: Core_i9_Virtual<br>System Uptime: 42 days');
+                    } else if (messageText === 'whoami') {
+                        printPingRow('stream_user');
+                    } else if (messageText === 'tasklist') {
+                        printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
+                    } else if (messageText === 'tree') {
+                        printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
+                    } else if (messageText === 'color' && hasPermission) {
+                        const arg = words[1] ? words[1].toLowerCase() : '';
+                        
+                        termContainer.className = 'terminal-container'; 
+                        
+                        if (arg === '') {
+                            termContainer.classList.add('cmd-color-f');
+                            printPingRow('<br>Console colors have been reset to default.');
+                        } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
+                            const bgAttr = arg.charAt(0);
+                            const textAttr = arg.charAt(1);
+                            
+                            if (bgAttr === textAttr) {
+                                printPingRow('<br>Error: Text and background colors must not be the same.');
+                            } else {
+                                termContainer.classList.add(`cmd-bg-${bgAttr}`);
+                                termContainer.classList.add(`cmd-color-${textAttr}`);
+                            }
+                        } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
+                            termContainer.classList.add(`cmd-bg-0`);
+                            termContainer.classList.add(`cmd-color-${arg}`);
+                        } else {
+                            printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
+                        }
                     }
                 }
             }
-        }
-        
-        if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "system clear")) {
-            clearConsoleLog();
-        }
-    };
+            
+            if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "system clear")) {
+                clearConsoleLog();
+            }
+        };
+    }
 
-    updateCursorPosition();
+    function startBootSequence() {
+        const header = document.createElement('div');
+        header.className = 'line system-log';
+        header.style.marginBottom = '30px';
+        header.innerHTML = `Microsoft(R) Windows WT(TM)<br>(c) Copyright 1985-1996 Microsoft Corp.`;
+        terminal.appendChild(header);
+
+        setTimeout(() => {
+            const line1 = document.createElement('div');
+            line1.className = 'line system-log';
+            line1.innerHTML = `<span class="prefix">C:\\FunnyStreamTools&gt;</span> <span class="cmd-text"></span>`;
+            terminal.appendChild(line1);
+            updateCursorPosition();
+
+            const textSpan1 = line1.querySelector('.cmd-text');
+            typeEffect(textSpan1, 'boot --init', 80, () => {
+                playTerminalBeep();
+                updateCursorPosition();
+
+                const line2 = document.createElement('div');
+                line2.className = 'line system-log';
+                line2.innerHTML = `connecting to CoreEngine via WebSocket...`;
+                terminal.appendChild(line2);
+                updateCursorPosition();
+
+                setTimeout(() => {
+                    const successLine = document.createElement('div');
+                    successLine.className = 'line system-log';
+                    successLine.innerHTML = `SUCCESS: Connected to EventBus active context.`;
+                    terminal.appendChild(successLine);
+                    playTerminalBeep();
+                    updateCursorPosition();
+
+                    initWebSocket();
+                }, 1500); 
+            });
+        }, 500);
+    }
+
+    startBootSequence();
 
     window.addEventListener('resize', () => {
         if (isMatrixRunning) {

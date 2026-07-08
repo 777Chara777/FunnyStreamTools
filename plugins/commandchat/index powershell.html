@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Windows PowerShell Terminal</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: transparent; 
+            font-family: 'Segoe UI', 'Cascadia Code', 'Consolas', monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            position: relative;
+            padding: 10px; 
+        }
+
+        .window {
+            width: 100%;
+            height: 100%;
+            background-color: rgba(25, 25, 25, 0.95);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            border-radius: 8px; 
+            z-index: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .title-bar {
+            background-color: rgba(32, 32, 32, 0.95);
+            height: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 15px;
+            padding-right: 0;
+            user-select: none;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .terminal-tab {
+            background-color: rgba(25, 25, 25, 0.95);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            margin-top: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: none;
+            color: #eeeeee;
+            font-size: 13px;
+            gap: 8px;
+        }
+
+        .tab-icon {
+            color: #61afef;
+            font-weight: bold;
+        }
+        
+        .window-controls {
+            display: flex;
+            height: 100%;
+            align-items: center;
+        }
+        
+        .control-btn {
+            width: 46px;
+            height: 100%;
+            color: #ffffff;
+            font-size: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .control-btn:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .control-btn.close:hover {
+            background-color: #e81123;
+        }
+
+        .terminal-container {
+            position: relative;
+            flex-grow: 1;
+            overflow: hidden;
+            background-color: transparent; 
+        }
+
+        .terminal-body {
+            padding: 15px;
+            height: 100%;
+            overflow-y: auto;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+
+            &::-webkit-scrollbar { display: none; }
+            scrollbar-width: none;
+        }
+
+        .line {
+            word-wrap: break-word;
+            color: #cccccc; 
+            font-size: 18px;
+            line-height: 24px;
+            margin-bottom: 6px;
+            position: relative;
+        }
+
+        .user { color: #98c379; font-weight: normal; } 
+        .prefix { color: #61afef; font-weight: bold; } 
+        .text { color: #abb2bf; }
+        .system-log { color: #5c6370; } 
+        .system-success { color: #98c379; font-weight: bold; }
+        .system-error { color: #e06c75; }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 18px;
+            background-color: #ffffff; 
+            margin-left: 2px;
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        #matrixCanvas {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 40px);
+            z-index: 10;
+            pointer-events: none; 
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .cmd-color-a { color: #98c379 !important; }
+        .cmd-color-c { color: #e06c75 !important; }
+        .cmd-color-e { color: #e5c07b !important; }
+        .cmd-color-f { color: #ffffff !important; }
+    </style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<div class="window">
+    <div class="title-bar">
+        <div class="terminal-tab">
+            <span class="tab-icon">🪟</span>
+            <span>Windows PowerShell</span>
+        </div>
+        <div class="window-controls">
+            <div class="control-btn">⚊</div>
+            <div class="control-btn">🗖</div>
+            <div class="control-btn close">✕</div>
+        </div>
+    </div>
+
+    <div class="terminal-container" id="termContainer">
+        <div class="terminal-body" id="terminal">
+
+        </div>
+    </div>
+</div>
+
+<script>
+    const terminal = document.getElementById('terminal');
+    const termContainer = document.getElementById('termContainer');
+    const matrixCanvas = document.getElementById('matrixCanvas');
+    const ctx = matrixCanvas.getContext('2d');
+    const MAX_LINES = 35; 
+    let matrixInterval = null;
+    let isMatrixRunning = false;
+    let ws = null;
+
+    const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'format', 'shutdown', 'exit'];
+
+    function playTerminalBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(600, audioCtx.currentTime); 
+            gainNode.gain.setValueAtTime(0.005, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.05);
+            oscillator.stop(audioCtx.currentTime + 0.05);
+        } catch (e) {}
+    }
+
+    function typeEffect(element, text, speed, callback) {
+        let i = 0;
+        element.textContent = "";
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                setTimeout(type, speed);
+            } else if (callback) {
+                callback();
+            }
+        }
+        type();
+    }
+
+    function updateCursorPosition() {
+        const oldCursors = terminal.querySelectorAll('.cursor');
+        oldCursors.forEach(c => c.remove());
+
+        const lines = terminal.getElementsByClassName('line');
+        if (lines.length === 0) return;
+        
+        const lastLine = lines[lines.length - 1];
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        lastLine.appendChild(cursor);
+
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function printPingRow(text, className = 'system-log') {
+        const line = document.createElement('div');
+        line.className = `line ${className}`;
+        line.innerHTML = text;
+        terminal.appendChild(line);
+        while (terminal.getElementsByClassName('line').length > MAX_LINES) {
+            terminal.removeChild(terminal.firstChild);
+        }
+        updateCursorPosition();
+    }
+
+    function initWebSocket() {
+        ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+        ws.onmessage = function(event) {
+            const packet = JSON.parse(event.data);
+            if (packet.topic.endsWith(':message')) {
+                const data = packet.data;
+                const messageText = data.text.trim().toLowerCase();
+                const hasPermission = data.isMod === true;
+
+                playTerminalBeep();
+
+                const line = document.createElement('div');
+                line.className = 'line';
+                line.innerHTML = `
+                    <span class="prefix">PS C:\\Users\\Stream&gt;</span> 
+                    <span class="user" style="color: ${data.color || '#98c379'}">[${data.user}]</span> 
+                    <span class="text">:: ${data.text}</span>
+                `;
+                terminal.appendChild(line);
+                updateCursorPosition();
+            }
+        };
+    };
+
+    function startBootSequence() {
+        const header = document.createElement('div');
+        header.className = 'line system-log';
+        header.style.marginBottom = '20px';
+        header.innerHTML = `Windows PowerShell<br>Copyright (C) Microsoft Corporation. All rights reserved.<br>Install the latest PowerShell for new features and improvements!`;
+        terminal.appendChild(header);
+
+        setTimeout(() => {
+            const line1 = document.createElement('div');
+            line1.className = 'line';
+            line1.innerHTML = `<span class="prefix">PS C:\\FunnyStreamTools&gt;</span> <span class="cmd-text"></span>`;
+            terminal.appendChild(line1);
+            updateCursorPosition();
+
+            const textSpan1 = line1.querySelector('.cmd-text');
+            typeEffect(textSpan1, './boot --init', 60, () => {
+                playTerminalBeep();
+                updateCursorPosition();
+
+                const line2 = document.createElement('div');
+                line2.className = 'line system-log';
+                line2.innerHTML = `<span class="prefix">↳</span> Connecting to CoreEngine via WebSocket...`;
+                terminal.appendChild(line2);
+                updateCursorPosition();
+
+                setTimeout(() => {
+                    const successLine = document.createElement('div');
+                    successLine.className = 'line system-success';
+                    successLine.innerHTML = `✔ SUCCESS: Connected to EventBus active context.`; 
+                    terminal.appendChild(successLine);
+                    playTerminalBeep();
+                    
+                    const emptyLine = document.createElement('div');
+                    emptyLine.className = 'line';
+                    emptyLine.innerHTML = `<span class="prefix">PS C:\\Users\\Stream&gt;</span> `;
+                    terminal.appendChild(emptyLine);
+                    
+                    updateCursorPosition();
+
+                    initWebSocket();
+                }, 1800); 
+            });
+        }, 600);
+    }
+
+    startBootSequence();
+</script>
+</body>
+</html>
