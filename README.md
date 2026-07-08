@@ -19,7 +19,7 @@
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/funnystreamtool.git
+git clone https://github.com/777Chara777/FunnyStreamTools.git
 cd FunnyStreamTools
 
 ```
