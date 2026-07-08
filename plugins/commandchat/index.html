@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Windows Terminal (CMD Interactive & Ping)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: transparent; 
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            position: relative;
+        }
+
+        .window {
+            width: 100%;
+            height: 100vh;
+            background-color: #0c0c0c;
+            display: flex;
+            flex-direction: column;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            z-index: 1;
+        }
+
+        .title-bar {
+            background-color: #202020;
+            height: 38px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 14px;
+            user-select: none;
+            border-bottom: 1px solid #333333;
+            flex-shrink: 0;
+        }
+        .title-text {
+            color: #cccccc;
+            font-size: 14px;
+        }
+        .window-controls {
+            display: flex;
+            height: 100%;
+        }
+        .control-btn {
+            width: 46px;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        .control-btn.close:hover {
+            background-color: #e81123;
+            color: #ffffff;
+        }
+        .control-btn:not(.close):hover {
+            background-color: #333333;
+        }
+
+        .terminal-body {
+            padding: 20px;
+            padding-top: 0px;
+            flex-grow: 1;
+            overflow-y: auto;
+            background-color: #0c0c0c;
+
+            &::-webkit-scrollbar { display: none; }
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .line {
+            word-wrap: break-word;
+            color: #ffffff; 
+            font-size: 24px; 
+            margin-bottom: 4px;
+        }
+
+        .prefix { color: #cccccc; } 
+        .user { color: #00ff00; font-weight: bold; } 
+        .text { color: #cccccc; }
+        .system-log { color: #cccccc; } 
+        .system-error { color: #ff2222; font-weight: bold; }
+
+        .cursor {
+            display: inline-block;
+            width: 12px;
+            height: 26px;
+            background-color: #ffffff;
+            margin-left: 6px;
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 49% { background-color: #ffffff; }
+            50%, 100% { background-color: transparent; }
+        }
+
+        #matrixCanvas {
+            position: absolute;
+            top: 38px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 38px);
+            z-index: 10;
+            background-color: rgba(12, 12, 12, 0.9);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<div class="window">
+    <div class="title-bar">
+        <div class="title-text">C:\Windows\system32\cmd.exe</div>
+        <div class="window-controls">
+            <div class="control-btn">─</div>
+            <div class="control-btn">❑</div>
+            <div class="control-btn close">✕</div>
+        </div>
+    </div>
+
+    <div class="terminal-body" id="terminal">
+        <div class="line system-log" style="margin-bottom: 30px;">Microsoft Windows [Version 10.0.19045.6466]<br>(c) Microsoft Corporation. All rights reserved.</div>
+        <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> boot --init</div>
+        <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> connecting to CoreEngine via WebSocket...</div>
+        <div class="line system-log"><span class="prefix">C:\system&gt;</span> SUCCESS: Connected to EventBus active context.<span class="cursor"></span></div>
+    </div>
+</div>
+
+<script>
+    const terminal = document.getElementById('terminal');
+    const matrixCanvas = document.getElementById('matrixCanvas');
+    const ctx = matrixCanvas.getContext('2d');
+    const MAX_LINES = 35; 
+    let matrixInterval = null;
+
+    function playTerminalBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.04);
+            oscillator.stop(audioCtx.currentTime + 0.04);
+        } catch (e) {}
+    }
+
+    function typeEffect(element, text, speed, callback) {
+        let i = 0;
+        element.textContent = "";
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                setTimeout(type, speed);
+            } else if (callback) {
+                callback();
+            }
+        }
+        type();
+    }
+
+    function moveCursorToLastLine(targetLine) {
+        const oldCursor = terminal.querySelector('.cursor');
+        if (oldCursor) oldCursor.remove();
+
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        targetLine.appendChild(cursor);
+        
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function cleanupOldLines() {
+        const lines = terminal.getElementsByClassName('line');
+        while (lines.length > MAX_LINES) {
+            terminal.removeChild(lines[0]);
+        }
+    }
+
+    function printPingRow(text, color = '#cccccc') {
+        const line = document.createElement('div');
+        line.className = 'line system-log';
+        line.style.color = color;
+        line.innerHTML = text;
+        terminal.appendChild(line);
+        cleanupOldLines();
+        moveCursorToLastLine(line);
+    }
+
+    function runPingProcess() {
+        printPingRow('<br>Pinging 127.0.0.1 with 32 bytes of data:');
+
+        let repliesCount = 0;
+        
+        const replyInterval = setInterval(() => {
+            repliesCount++;
+            playTerminalBeep();
+            printPingRow('Reply from 127.0.0.1: bytes=32 time&lt;1ms TTL=128');
+
+            if (repliesCount === 4) {
+                clearInterval(replyInterval);
+                
+                setTimeout(() => {
+                    const stats = `
+<br>Ping statistics for 127.0.0.1:<br>&nbsp;&nbsp;&nbsp;&nbsp;Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),<br>Approximate round trip times in milli-seconds:<br>&nbsp;&nbsp;&nbsp;&nbsp;Minimum = 0ms, Maximum = 0ms, Average = 0ms<br><br>
+                    `;
+                    printPingRow(stats); 
+                }, 1000);
+            }
+        }, 1000);
+    }
+
+    function startMatrixEffect() {
+        if (matrixInterval) clearInterval(matrixInterval);
+        matrixCanvas.width = window.innerWidth;
+        matrixCanvas.height = window.innerHeight - 38;
+        matrixCanvas.style.display = 'block';
+
+        const alphabet = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890ABCDEF'.split('');
+        const fontSize = 16;
+        const columns = matrixCanvas.width / fontSize;
+        const rainDrops = Array(Math.floor(columns)).fill(1);
+
+        const draw = () => {
+            ctx.fillStyle = 'rgba(12, 12, 12, 0.05)';
+            ctx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet[Math.floor(Math.random() * alphabet.length)];
+                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+                if (rainDrops[i] * fontSize > matrixCanvas.height && Math.random() > 0.975) {
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+        };
+
+        matrixInterval = setInterval(draw, 30);
+        setTimeout(() => {
+            clearInterval(matrixInterval);
+            matrixCanvas.style.display = 'none';
+            matrixInterval = null;
+        }, 4000);
+    }
+
+    function clearConsoleLog() {
+        terminal.innerHTML = '';
+        const line = document.createElement('div');
+        line.className = 'line system-log';
+        line.innerHTML = `<span class="prefix">C:\\system&gt;</span> Console buffer cleared. Done.`;
+        terminal.appendChild(line);
+        moveCursorToLastLine(line);
+    }
+
+    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+
+    ws.onmessage = function(event) {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.topic.endsWith(':message')) {
+            const data = packet.data;
+            const messageText = data.text.trim().toLowerCase();
+            
+            const hasPermission = data.isMod === true; 
+
+            playTerminalBeep();
+
+            if (hasPermission) {
+                if (messageText === '!cls' || messageText === '!clear') {
+                    clearConsoleLog();
+                    return;
+                }
+
+                if (messageText === '!matrix') {
+                    startMatrixEffect();
+                    return;
+                }
+            }
+
+            const line = document.createElement('div');
+            line.className = 'line';
+            
+            const platform = data.platform || 'stream';
+            line.innerHTML = `
+                <span class="prefix">C:\\stream\\${platform}&gt;</span> 
+                <span class="user">${data.user}:</span> 
+                <span class="text"></span>
+            `;
+
+            terminal.appendChild(line);
+            cleanupOldLines();
+
+            const textSpan = line.querySelector('.text');
+            typeEffect(textSpan, data.text, 10, () => {
+                moveCursorToLastLine(line);
+
+                if (hasPermission && messageText === '!ping') {
+                    runPingProcess();
+                }
+            });
+
+
+            if (messageText === 'dir') {
+                printPingRow('Directory of C:\\stream<br>08.07.2026  04:24    &lt;DIR&gt;          logs<br>08.07.2026  04:24    1,048,576      stream_data.db<br>1 File(s)  1,048,576 bytes');
+            } else if (messageText === 'ipconfig') {
+                printPingRow('Ethernet adapter Ethernet:<br>   IPv4 Address. . . . . : 192.168.1.137<br>   Subnet Mask . . . . : 255.255.255.0');
+            } else if (messageText === 'systeminfo') {
+                printPingRow('OS Name: StreamOS 2026<br>Processor: Core_i9_Virtual<br>System Uptime: 42 days');
+            } else if (messageText === 'whoami') {
+                printPingRow('stream_user');
+            } else if (messageText === 'tasklist') {
+                printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
+            } else if (messageText === 'tree') {
+                printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
+            }
+        }
+        
+        if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "system clear")) {
+            clearConsoleLog();
+        }
+    };
+
+    window.addEventListener('resize', () => {
+        if (matrixCanvas.style.display === 'block') {
+            matrixCanvas.width = window.innerWidth;
+            matrixCanvas.height = window.innerHeight - 38;
+        }
+    });
+</script>
+</body>
+</html>

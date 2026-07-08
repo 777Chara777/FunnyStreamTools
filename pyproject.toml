@@ -1,0 +1,11 @@
+[project]
+name = "funnystreamtools"
+version = "0.1.0"
+description = "FunnyStreamTools is a lightweight, modular, and highly customizable streaming utility designed aesthetic to your live broadcasts. It bridges your streaming platforms (Twitch, Discord, etc.) directly into a beautiful, terminal-inspired overlay for OBS."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.139.0",
+    "uvicorn>=0.50.2",
+    "websockets>=16.0",
+]
