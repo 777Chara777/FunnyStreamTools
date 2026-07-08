@@ -1,4 +1,8 @@
 import uvicorn
+import dotenv
+
+dotenv.load_dotenv()
+
 
 if __name__ == "__main__":
     print("[*] Launching FunnyStreamTools via the root entry point...")

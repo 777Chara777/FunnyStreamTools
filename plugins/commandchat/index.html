@@ -116,6 +116,13 @@
             background-color: rgba(12, 12, 12, 0.9);
             display: none;
         }
+
+        .emote {
+            height: 1.2em; 
+            vertical-align: middle;
+            margin: 0 2px;
+            image-rendering: pixelated;
+        }
     </style>
 </head>
 <body>
@@ -302,10 +309,14 @@
             line.className = 'line';
             
             const platform = data.platform || 'stream';
+            const content = data.html_text || data.text; 
+            console.log(content)
+            console.log(data.html_text)
+
             line.innerHTML = `
                 <span class="prefix">C:\\stream\\${platform}&gt;</span> 
                 <span class="user">${data.user}:</span> 
-                <span class="text"></span>
+                <span class="text">${content}</span>
             `;
 
             terminal.appendChild(line);
@@ -313,6 +324,7 @@
 
             const textSpan = line.querySelector('.text');
             typeEffect(textSpan, data.text, 10, () => {
+                textSpan.innerHTML = content;
                 moveCursorToLastLine(line);
 
                 if (hasPermission && messageText === '!ping') {

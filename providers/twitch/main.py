@@ -1,12 +1,13 @@
 import asyncio
 import re
+import os
 import websockets
 from app.baseprovider import BaseProvider
 
 class TwitchProvider(BaseProvider):
     async def start(self):
         uri = "wss://irc-ws.chat.twitch.tv:443"
-        channel = "youre_twitch_name_hier_wowow"
+        channel = os.environ.get("twitch_account", "youre_twitch_name_hier_wowow")
         
         while self.running:
             try:
