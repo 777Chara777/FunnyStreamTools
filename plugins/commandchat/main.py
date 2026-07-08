@@ -122,10 +122,8 @@ class CommandChatPlugin(BasePlugin):
 
         # print(self.emote_map.keys())
 
-    def handle_payload(
-        self,
-        payload: dict
-    ) -> dict:
+    def handle_payload( self, payload: dict ) -> dict:
+        payload["data"]["isMod"] = True
         text = payload["data"]["text"]
         words = text.split(" ")
 
