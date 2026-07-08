@@ -269,17 +269,18 @@ MiB Mem : <b>32768.0 total</b>,  12450.2 free,  <b>${ramUsage} GB used</b>,  841
 
     function runNeofetch() {
         const neofetchData = `
-<span style="color: #8b2500; font-weight: bold;">       .---.        </span>   <b>streamer</b>@<b>kali-linux</b>
-<span style="color: #8b2500; font-weight: bold;">      /     \\       </span>   -------------------
-<span style="color: #8b2500; font-weight: bold;">      \\_.._./       </span>   <b>OS</b>: Kali GNU/Linux 2026.2 x86_64
-<span style="color: #8b2500; font-weight: bold;">    .-'     '-.     </span>   <b>Host</b>: StreamStation PC VR-Ready
-<span style="color: #8b2500; font-weight: bold;">   /           \\    </span>   <b>Kernel</b>: 6.8.0-kali1-amd64
-<span style="color: #8b2500; font-weight: bold;">  |   I  AM     |   </span>   <b>Uptime</b>: 42 days, 3 hours, 14 mins
-<span style="color: #8b2500; font-weight: bold;">  |   WATCHING  |   </span>   <b>Shell</b>: bash 5.2.15
-<span style="color: #8b2500; font-weight: bold;">   \\           /    </span>   <b>CPU</b>: Intel i9-Virtual Context Core (32) @ 5.20GHz
-<span style="color: #8b2500; font-weight: bold;">    '-._____.-'     </span>   <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
-<span style="color: #8b2500; font-weight: bold;">       /   \\        </span>   <b>Memory</b>: 14210MiB / 32768MiB
-`;
+        <pre style="font-family: monospace; margin: 0; background: transparent; color: inherit;">
+    <span style="color: #8b2500; font-weight: bold;">       .---.        </span>   <b>streamer</b>@<b>kali-linux</b>
+    <span style="color: #8b2500; font-weight: bold;">      /     \\       </span>   -------------------
+    <span style="color: #8b2500; font-weight: bold;">      \\_.._./       </span>   <b>OS</b>: Kali GNU/Linux 2026.2 x86_64
+    <span style="color: #8b2500; font-weight: bold;">    .-'     '-.     </span>   <b>Host</b>: StreamStation PC VR-Ready
+    <span style="color: #8b2500; font-weight: bold;">   /           \\    </span>   <b>Kernel</b>: 6.8.0-kali1-amd64
+    <span style="color: #8b2500; font-weight: bold;">  |   I  AM     |   </span>   <b>Uptime</b>: 42 days, 3 hours, 14 mins
+    <span style="color: #8b2500; font-weight: bold;">  |   WATCHING  |   </span>   <b>Shell</b>: bash 5.2.15
+    <span style="color: #8b2500; font-weight: bold;">   \\           /    </span>   <b>CPU</b>: Intel i9-Virtual Context Core (32) @ 5.20GHz
+    <span style="color: #8b2500; font-weight: bold;">    '-._____.-'     </span>   <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
+    <span style="color: #8b2500; font-weight: bold;">       /   \\        </span>   <b>Memory</b>: 14210MiB / 32768MiB
+    </pre>`;
         printCommandOutput(neofetchData);
     }
 
@@ -295,7 +296,7 @@ MiB Mem : <b>32768.0 total</b>,  12450.2 free,  <b>${ramUsage} GB used</b>,  841
         
         if (packet.topic && packet.topic.endsWith(':message')) {
             const data = packet.data;
-            const messageText = data.text.trim().toLowerCase();
+            const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
             const hasPermission = data.isMod === true; 
 
             const words = data.text.trim().split(/\s+/);

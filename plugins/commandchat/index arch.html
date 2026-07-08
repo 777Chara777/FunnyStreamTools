@@ -236,32 +236,34 @@
             const cpuUsage = (Math.random() * 15 + 2).toFixed(1);
             const ramUsage = (Math.random() * 3 + 4).toFixed(2);
             const topData = `
-<b>top - 15:42:01 up 12 days, 22:11,  1 user,  load average: 0.11, 0.14, 0.05</b>
-Tasks: <b>210 total</b>,   1 running, 209 sleeping,   0 stopped,   0 zombie
-%Cpu(s): <b>${cpuUsage} us</b>,  1.0 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi
-MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  9120.4 buff/cache
+<b>top - 15:42:01 up 12 days, 22:11,  1 user,  load average: 0.11, 0.14, 0.05</b><br>
+Tasks: <b>210 total</b>,   1 running, 209 sleeping,   0 stopped,   0 zombie<br>
+%Cpu(s): <b>${cpuUsage} us</b>,  1.0 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi<br>
+MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  9120.4 buff/cache<br>
 
-  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
- 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.8).toFixed(1)}   2.8   4:11.23 OBS.exe
- 1240 bot_user  20   0  842104  64120  24104 S   0.3   0.2   0:45.10 TwitchBot.exe
-  915 arch_usr  20   0  112400  10120   3900 R   0.2   0.0   0:01.05 top`;
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND<br>
+ 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.8).toFixed(1)}   2.8   4:11.23 OBS.exe<br>
+ 1240 bot_user  20   0  842104  64120  24104 S   0.3   0.2   0:45.10 TwitchBot.exe<br>
+  915 arch_usr  20   0  112400  10120   3900 R   0.2   0.0   0:01.05 top<br>`;
             printCommandOutput(topData, '#81a1c1');
         }, 800);
     }
 
     function runNeofetch() {
         const neofetchData = `
-<span style="color: #1793d1; font-weight: bold;">       /\\         </span>   <b>streamer</b>@<b>archlinux</b>
-<span style="color: #1793d1; font-weight: bold;">      /  \\        </span>   -------------------
-<span style="color: #1793d1; font-weight: bold;">     /\\   \\       </span>   <b>OS</b>: Arch Linux x86_64
-<span style="color: #1793d1; font-weight: bold;">    /  __  \\      </span>   <b>Host</b>: Custom Stream-Rig
-<span style="color: #1793d1; font-weight: bold;">   /  (  )  \\     </span>   <b>Kernel</b>: 6.9.5-arch1-1
-<span style="color: #1793d1; font-weight: bold;">  /  _    _  \\    </span>   <b>Uptime</b>: 12 days, 22 hours, 11 mins
-<span style="color: #1793d1; font-weight: bold;"> /  (______)  \\   </span>   <b>Shell</b>: bash 5.2.26
-<span style="color: #1793d1; font-weight: bold;">/              \\  </span>   <b>CPU</b>: AMD Ryzen 9 7950X3D (32) @ 5.70GHz
-                     <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
-                     <b>Memory</b>: 6114MiB / 32768MiB
-`;
+    <pre style="font-family: monospace; margin: 0; background: transparent; color: inherit;">
+    <span style="color: #1793d1; font-weight: bold;">       /\\         </span>   <b>streamer</b>@<b>archlinux</b>
+    <span style="color: #1793d1; font-weight: bold;">      /  \\        </span>   -------------------
+    <span style="color: #1793d1; font-weight: bold;">     /\\   \\       </span>   <b>OS</b>: Arch Linux x86_64
+    <span style="color: #1793d1; font-weight: bold;">    /  __  \\      </span>   <b>Host</b>: Custom Stream-Rig
+    <span style="color: #1793d1; font-weight: bold;">   /  (  )  \\     </span>   <b>Kernel</b>: 6.9.5-arch1-1
+    <span style="color: #1793d1; font-weight: bold;">  /  _    _  \\    </span>   <b>Uptime</b>: 12 days, 22 hours, 11 mins
+    <span style="color: #1793d1; font-weight: bold;"> /  (______)  \\   </span>   <b>Shell</b>: bash 5.2.26
+    <span style="color: #1793d1; font-weight: bold;">/              \\  </span>   <b>CPU</b>: AMD Ryzen 9 7950X3D (32) @ 5.70GHz
+                         <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
+                         <b>Memory</b>: 6114MiB / 32768MiB
+    </pre>
+    `;
         printCommandOutput(neofetchData);
     }
 
@@ -281,7 +283,7 @@ MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  912
         
         if (packet.topic && packet.topic.endsWith(':message')) {
             const data = packet.data;
-            const messageText = data.text.trim().toLowerCase();
+            const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
             const hasPermission = data.isMod === true; 
 
             const words = data.text.trim().split(/\s+/);

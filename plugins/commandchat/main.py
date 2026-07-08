@@ -76,9 +76,13 @@ class CommandChatPlugin(BasePlugin):
 
     def handle_payload(self, payload: dict) -> dict:
         text = payload["data"]["text"]
+
+        text = re.sub(r'[\u200b-\u200d\ufeff\u00ad\u034f]', '', text)
+        text = text.strip()
+        payload["data"]["text"] = text
+
         emotes_raw = payload["data"].get("emotes_raw", "")
 
-        # --- ШАГ 1: Обработка официальных смайлов Twitch по индексам ---
         html_text = text
         if emotes_raw:
             replacements = []
@@ -89,7 +93,6 @@ class CommandChatPlugin(BasePlugin):
                     emote_id, positions = emote_data.split(":")
                     for position in positions.split(","):
                         start, end = map(int, position.split("-"))
-                        # Формируем тег для оригинального смайла Twitch
                         img_tag = f'<img src="https://static-cdn.jtvnw.net/emoticons/v2/{emote_id}/default/light/2.0" class="emote">'
                         replacements.append({
                             "start": start,
@@ -97,19 +100,14 @@ class CommandChatPlugin(BasePlugin):
                             "html": img_tag
                         })
                 
-                # Сортируем замены с конца к началу
                 replacements.sort(key=lambda x: x["start"], reverse=True)
                 
-                # Делаем замены в тексте
                 for r in replacements:
                     html_text = html_text[:r["start"]] + r["html"] + html_text[r["end"]:]
             except Exception as e:
                 print(f"Error parsing Twitch emotes: {e}")
                 html_text = text
 
-        # --- ШАГ 2: Обработка сторонних смайлов 7TV ---
-        # Разбиваем строку. Обратите внимание: части, ставшие HTML-тегами (<img...>), 
-        # не изменятся, так как их «имен» нет в self.emote_map.
         words = html_text.split(" ")
         processed = []
         for word in words:
@@ -118,7 +116,6 @@ class CommandChatPlugin(BasePlugin):
             else:
                 processed.append(word)
 
-        # Сохраняем итоговый HTML-код
         payload["data"]["html_text"] = " ".join(processed)
         return payload
     

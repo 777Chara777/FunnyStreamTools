@@ -105,9 +105,14 @@
         }
 
         .terminal-body {
-            padding: 10px;
+            padding: 6px 10px;
             height: 100%;
             overflow-y: auto;
+
+            font-family: "MS Sans Serif", "Courier New", Courier, monospace;
+            font-smooth: never;
+            -webkit-font-smoothing: none;
+            -moz-osx-font-smoothing: none;
 
             &::-webkit-scrollbar { display: none; }
             scrollbar-width: none;
@@ -116,30 +121,37 @@
 
         .line {
             word-wrap: break-word;
-            color: #ffffff; 
-            font-size: 18px;
+            color: #c0c0c0; 
+            font-size: 20px;
+            line-height: 18px;
             margin-bottom: 4px;
             position: relative;
         }
+        [class*="cmd-color-"] .line,
+        [class*="cmd-color-"] .prefix,
+        [class*="cmd-color-"] .text,
+        [class*="cmd-color-"] .system-log { 
+            color: inherit !important; 
+        }
 
-        .prefix { color: #ffffff; } 
         .user { color: #00ff00; font-weight: normal; } 
+        .prefix { color: #ffffff; } 
         .text { color: #ffffff; }
         .system-log { color: #ffffff; } 
         .system-error { color: #ff5555; }
 
         .cursor {
             display: inline-block;
-            width: 10px;
-            height: 18px;
-            background-color: #ffffff;
-            margin-left: 2px;
+            width: 8px;
+            height: 15px;
+            background-color: currentColor; 
+            margin-left: 1px;
             vertical-align: bottom;
             animation: blink 1s infinite;
         }
         @keyframes blink {
-            0%, 49% { background-color: #ffffff; }
-            50%, 100% { background-color: transparent; }
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
         }
 
         #matrixCanvas {
@@ -165,6 +177,40 @@
         .matrix-image-glitch {
             filter: brightness(0.5) sepia(1) hue-rotate(70deg) saturate(5) contrast(2) drop-shadow(0 0 3px #00ff00) !important;
         }
+
+        .cmd-color-0 { color: #000000 !important; }
+        .cmd-color-1 { color: #000080 !important; }
+        .cmd-color-2 { color: #008000 !important; }
+        .cmd-color-3 { color: #008080 !important; }
+        .cmd-color-4 { color: #800000 !important; }
+        .cmd-color-5 { color: #800080 !important; }
+        .cmd-color-6 { color: #808000 !important; }
+        .cmd-color-7 { color: #c0c0c0 !important; }
+        .cmd-color-8 { color: #808080 !important; }
+        .cmd-color-9 { color: #0000ff !important; }
+        .cmd-color-a { color: #00ff00 !important; }
+        .cmd-color-b { color: #00ffff !important; }
+        .cmd-color-c { color: #ff0000 !important; }
+        .cmd-color-d { color: #ff00ff !important; }
+        .cmd-color-e { color: #ffff00 !important; }
+        .cmd-color-f { color: #ffffff !important; }
+
+        .cmd-bg-0 { background-color: #000000 !important; }
+        .cmd-bg-1 { background-color: #000080 !important; }
+        .cmd-bg-2 { background-color: #008000 !important; }
+        .cmd-bg-3 { background-color: #008080 !important; }
+        .cmd-bg-4 { background-color: #800000 !important; }
+        .cmd-bg-5 { background-color: #800080 !important; }
+        .cmd-bg-6 { background-color: #808000 !important; }
+        .cmd-bg-7 { background-color: #c0c0c0 !important; }
+        .cmd-bg-8 { background-color: #808080 !important; }
+        .cmd-bg-9 { background-color: #0000ff !important; }
+        .cmd-bg-a { background-color: #00ff00 !important; }
+        .cmd-bg-b { background-color: #00ffff !important; }
+        .cmd-bg-c { background-color: #ff0000 !important; }
+        .cmd-bg-d { background-color: #ff00ff !important; }
+        .cmd-bg-e { background-color: #ffff00 !important; }
+        .cmd-bg-f { background-color: #ffffff !important; }
     </style>
 </head>
 <body>
@@ -181,9 +227,9 @@
         </div>
     </div>
 
-    <div class="terminal-container">
+    <div class="terminal-container" id="termContainer">
         <div class="terminal-body" id="terminal">
-            <div class="line system-log" style="margin-bottom: 30px;">Microsoft Windows [Version 10.0.19045.6466]<br>(c) Microsoft Corporation. All rights reserved.</div>
+            <div class="line system-log" style="margin-bottom: 30px;">Microsoft(R) Windows WT(TM)<br>(c) Copyright 1985-1996 Microsoft Corp.</div>
             <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> boot --init</div>
             <div class="line system-log"><span class="prefix">C:\FunnyStreamTools&gt;</span> connecting to CoreEngine via WebSocket...</div>
             <div class="line system-log"><span class="prefix">C:\system&gt;</span> SUCCESS: Connected to EventBus active context.</div>
@@ -193,6 +239,7 @@
 
 <script>
     const terminal = document.getElementById('terminal');
+    const termContainer = document.getElementById('termContainer');
     const matrixCanvas = document.getElementById('matrixCanvas');
     const ctx = matrixCanvas.getContext('2d');
     const MAX_LINES = 35; 
@@ -200,7 +247,7 @@
     let isMatrixRunning = false;
     let originalTerminalHTML = "";
 
-    const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'cls', 'format', 'shutdown', 'exit', 'help'];
+    const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'format', 'shutdown', 'exit', 'help'];
 
     const alphabet = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890*#$@%&'.split('');
 
@@ -457,7 +504,7 @@
         
         if (packet.topic.endsWith(':message')) {
             const data = packet.data;
-            const messageText = data.text.trim().toLowerCase();
+            const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
             const hasPermission = data.isMod === true; 
 
             const words = data.text.trim().split(/\s+/);
@@ -466,15 +513,40 @@
 
             let isBlockedCommand = block.includes(firstWord);
 
-
             if (hasPermission) {
-                if (messageText === '!cls' || messageText === '!clear') {
+                if (messageText === '!cls' || messageText === '!clear' || messageText === 'cls') {
                     clearConsoleLog();
                     return;
                 }
                 if (messageText === 'matrix') {
                     startMatrixEffect();
                     return;
+                }
+
+                if (firstWord === 'color') {
+                    const arg = words[1] ? words[1].toLowerCase() : '';
+                    
+                    termContainer.className = 'terminal-container'; 
+                    
+                    if (arg === '') {
+                        termContainer.classList.add('cmd-color-7');
+                        printPingRow('<br>Цвета консоли сброшены по умолчанию.');
+                    } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
+                        const bgAttr = arg.charAt(0);
+                        const textAttr = arg.charAt(1);
+                        
+                        if (bgAttr === textAttr) {
+                            printPingRow('<br>Ошибка: Цвет текста и фона не должны совпадать.');
+                        } else {
+                            termContainer.classList.add(`cmd-bg-${bgAttr}`);
+                            termContainer.classList.add(`cmd-color-${textAttr}`);
+                        }
+                    } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
+                        termContainer.classList.add(`cmd-bg-0`);
+                        termContainer.classList.add(`cmd-color-${arg}`);
+                    } else {
+                        printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
+                    }
                 }
             }
 
@@ -485,8 +557,8 @@
 
             line.innerHTML = `
                 <span class="prefix">C:\\chat\\${platform}&gt;</span> 
-                <span class="user" style="color: ${data.color || '#00ff00'}">${data.user}:</span> 
-                <span class="text">${content}</span>
+                <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
+                <span class="text">:: ${content}</span>
             `;
 
             if (isMatrixRunning) {
@@ -504,8 +576,8 @@
                 cleanLine.className = 'line';
                 cleanLine.innerHTML = `
                     <span class="prefix">C:\\chat\\${platform}&gt;</span> 
-                    <span class="user" style="color: ${data.color || '#00ff00'}">${data.user}:</span> 
-                    <span class="text">${content}</span>
+                    <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
+                    <span class="text">:: ${content}</span>
                 `;
                 originalTerminalHTML += cleanLine.outerHTML;
             } else {
@@ -514,8 +586,8 @@
                 updateCursorPosition();
 
                 const textSpan = line.querySelector('.text');
-                typeEffect(textSpan, data.text, 10, () => {
-                    textSpan.innerHTML = content;
+                typeEffect(textSpan, ":: " + data.text, 10, () => {
+                    textSpan.innerHTML = ":: " + content;
                     updateCursorPosition();
 
                     if (isBlockedCommand) {
