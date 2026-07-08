@@ -6,7 +6,7 @@ from app.baseprovider import BaseProvider
 class TwitchProvider(BaseProvider):
     async def start(self):
         uri = "wss://irc-ws.chat.twitch.tv:443"
-        channel = "thedoorknub"
+        channel = "youre_twitch_name_hier_wowow"
         
         while self.running:
             try:
