@@ -522,32 +522,6 @@
                     startMatrixEffect();
                     return;
                 }
-
-                if (firstWord === 'color') {
-                    const arg = words[1] ? words[1].toLowerCase() : '';
-                    
-                    termContainer.className = 'terminal-container'; 
-                    
-                    if (arg === '') {
-                        termContainer.classList.add('cmd-color-7');
-                        printPingRow('<br>Цвета консоли сброшены по умолчанию.');
-                    } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
-                        const bgAttr = arg.charAt(0);
-                        const textAttr = arg.charAt(1);
-                        
-                        if (bgAttr === textAttr) {
-                            printPingRow('<br>Ошибка: Цвет текста и фона не должны совпадать.');
-                        } else {
-                            termContainer.classList.add(`cmd-bg-${bgAttr}`);
-                            termContainer.classList.add(`cmd-color-${textAttr}`);
-                        }
-                    } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
-                        termContainer.classList.add(`cmd-bg-0`);
-                        termContainer.classList.add(`cmd-color-${arg}`);
-                    } else {
-                        printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
-                    }
-                }
             }
 
             const line = document.createElement('div');
@@ -614,6 +588,30 @@
                     printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
                 } else if (messageText === 'tree') {
                     printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
+                } else if (messageText === 'color' && hasPermission) {
+                    const arg = words[1] ? words[1].toLowerCase() : '';
+                    
+                    termContainer.className = 'terminal-container'; 
+                    
+                    if (arg === '') {
+                        termContainer.classList.add('cmd-color-f');
+                        printPingRow('<br>Console colors have been reset to default.');
+                    } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
+                        const bgAttr = arg.charAt(0);
+                        const textAttr = arg.charAt(1);
+                        
+                        if (bgAttr === textAttr) {
+                            printPingRow('<br>Error: Text and background colors must not be the same.');
+                        } else {
+                            termContainer.classList.add(`cmd-bg-${bgAttr}`);
+                            termContainer.classList.add(`cmd-color-${textAttr}`);
+                        }
+                    } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
+                        termContainer.classList.add(`cmd-bg-0`);
+                        termContainer.classList.add(`cmd-color-${arg}`);
+                    } else {
+                        printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
+                    }
                 }
             }
         }
