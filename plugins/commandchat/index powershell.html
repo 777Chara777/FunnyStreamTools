@@ -154,6 +154,14 @@
             transition: opacity 0.5s ease-in-out;
         }
 
+        .emote {
+            height: 1.2em; 
+            vertical-align: middle;
+            margin: 0 2px;
+            image-rendering: pixelated;
+            transition: filter 0.3s ease;
+        }
+
         .cmd-color-a { color: #98c379 !important; }
         .cmd-color-c { color: #e06c75 !important; }
         .cmd-color-e { color: #e5c07b !important; }
@@ -260,17 +268,18 @@
             const packet = JSON.parse(event.data);
             if (packet.topic.endsWith(':message')) {
                 const data = packet.data;
-                const messageText = data.text.trim().toLowerCase();
+                const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
                 const hasPermission = data.isMod === true;
 
                 playTerminalBeep();
 
                 const line = document.createElement('div');
+                const content = data.html_text || data.text; 
                 line.className = 'line';
                 line.innerHTML = `
                     <span class="prefix">PS C:\\Users\\Stream&gt;</span> 
                     <span class="user" style="color: ${data.color || '#98c379'}">[${data.user}]</span> 
-                    <span class="text">:: ${data.text}</span>
+                    <span class="text">:: ${content}</span>
                 `;
                 terminal.appendChild(line);
                 updateCursorPosition();
@@ -309,12 +318,6 @@
                     successLine.innerHTML = `✔ SUCCESS: Connected to EventBus active context.`; 
                     terminal.appendChild(successLine);
                     playTerminalBeep();
-                    
-                    const emptyLine = document.createElement('div');
-                    emptyLine.className = 'line';
-                    emptyLine.innerHTML = `<span class="prefix">PS C:\\Users\\Stream&gt;</span> `;
-                    terminal.appendChild(emptyLine);
-                    
                     updateCursorPosition();
 
                     initWebSocket();
