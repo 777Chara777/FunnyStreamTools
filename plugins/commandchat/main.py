@@ -33,6 +33,10 @@ class CommandChatPlugin(BasePlugin):
 
         if self.twitch_username:
             self.load_7tv_emotes(self.twitch_username)
+            self.load_betterttv_emotes(self.twitch_username) 
+            self.load_ffz_emotes(self.twitch_username)
+        
+        print(f"Loaded {len(self.emote_map)} total emotes")
 
     def get_twitch_id(self, username):
         url = f"https://decapi.me/twitch/id/{username}"
@@ -42,7 +46,55 @@ class CommandChatPlugin(BasePlugin):
             return None
         return response.text
 
+    def load_betterttv_emotes(self, username):
+        print("Loading BetterTTV GLOBAL emotes...")
+        try:
+            global_bttv_url = "https://api.betterttv.net/3/cached/emotes/global"
+            res = requests.get(global_bttv_url)
+            if res.status_code == 200:
+                for emote in res.json():
+                    self.emote_map[emote["code"]] = f"https://cdn.betterttv.net/emote/{emote['id']}/3x.webp"
+        except Exception as e:
+            print(f"Error loading BetterTTV global emotes: {e}")
+
+        if not username or username == "kek":
+            return
+
+        print(f"Loading BetterTTV channel emotes for {username}...")
+        try:
+            twitch_id = self.get_twitch_id(username)
+            if twitch_id:
+                channel_bttv_url = f"https://api.betterttv.net/3/cached/users/twitch/{twitch_id}"
+                res = requests.get(channel_bttv_url)
+                if res.status_code == 200:
+                    data = res.json()
+                    for emote in data.get("channelEmotes", []):
+                        self.emote_map[emote["code"]] = f"https://cdn.betterttv.net/emote/{emote['id']}/3x.webp"
+                    for emote in data.get("sharedEmotes", []):
+                        self.emote_map[emote["code"]] = f"https://cdn.betterttv.net/emote/{emote['id']}/3x.webp"
+        except Exception as e:
+            print(f"Error loading BetterTTV channel emotes: {e}")
+
     def load_7tv_emotes(self, username):
+        print("Loading 7TV GLOBAL emotes...")
+        try:
+            global_url = "https://7tv.io/v3/emote-sets/global"
+            global_response = requests.get(global_url)
+            if global_response.status_code == 200:
+                global_data = global_response.json()
+                for emote in global_data.get("emotes", []):
+                    name = emote["name"]
+                    emote_id = emote["id"]
+                    self.emote_map[name] = f"https://cdn.7tv.app/emote/{emote_id}/4x.webp"
+                print(f"Loaded {len(global_data.get('emotes', []))} global 7TV emotes")
+            else:
+                print("Failed to load global 7TV emotes")
+        except Exception as e:
+            print(f"Error loading global emotes: {e}")
+
+        if not username or username == "kek":
+            return
+
         print(f"Loading 7TV emotes for {username}")
         twitch_id = self.get_twitch_id(username)
         if not twitch_id:
@@ -67,12 +119,60 @@ class CommandChatPlugin(BasePlugin):
             return
 
         data = response.json()
-        for emote in data["emotes"]:
+        for emote in data.get("emotes", []):
             name = emote["name"]
             emote_id = emote["id"]
             self.emote_map[name] = f"https://cdn.7tv.app/emote/{emote_id}/4x.webp"
 
-        print(f"Loaded {len(self.emote_map)} 7TV emotes")
+    def load_ffz_emotes(self, username: str):
+        print("Loading FrankerFaceZ GLOBAL emotes...")
+        try:
+            global_ffz_url = "https://api.frankerfacez.com/v1/set/global"
+            res = requests.get(global_ffz_url)
+            if res.status_code == 200:
+                data = res.json()
+                default_sets = data.get("default_sets", [])
+                sets = data.get("sets", {})
+                
+                for set_id in default_sets:
+                    emote_set = sets.get(str(set_id), {})
+                    for emote in emote_set.get("emoticons", []):
+                        name = emote["name"]
+                        urls = emote.get("urls", {})
+                        emote_url = urls.get("4") or urls.get("2") or urls.get("1")
+                        if emote_url:
+                            if emote_url.startswith("//"):
+                                emote_url = "https:" + emote_url
+                            self.emote_map[name] = emote_url
+        except Exception as e:
+            print(f"Error loading FrankerFaceZ global emotes: {e}")
+
+        if not username or username == "kek":
+            return
+
+        print(f"Loading FrankerFaceZ channel emotes for {username}...")
+        try:
+            channel_ffz_url = f"https://api.frankerfacez.com/v1/room/{username}"
+            res = requests.get(channel_ffz_url)
+            if res.status_code == 200:
+                data = res.json()
+                room = data.get("room", {})
+                set_id = room.get("set")
+                sets = data.get("sets", {})
+                
+                if set_id and str(set_id) in sets:
+                    emote_set = sets[str(set_id)]
+                    for emote in emote_set.get("emoticons", []):
+                        name = emote["name"]
+                        urls = emote.get("urls", {})
+                        emote_url = urls.get("4") or urls.get("2") or urls.get("1")
+                        if emote_url:
+                            if emote_url.startswith("//"):
+                                emote_url = "https:" + emote_url
+                            self.emote_map[name] = emote_url
+        except Exception as e:
+            print(f"Error loading FrankerFaceZ channel emotes: {e}")
+        
 
     def handle_payload(self, payload: dict) -> dict:
         text = payload["data"]["text"]
