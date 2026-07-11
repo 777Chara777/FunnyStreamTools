@@ -89,6 +89,11 @@ This will create a `.my_app_sdk/` directory in your workspace.
 * **VS Code**: Add `".my_app_sdk"` to your `python.analysis.extraPaths` settings.
 * **PyCharm**: Right-click the `.my_app_sdk` folder -> *Mark Directory as* -> *Excluded* (or add it as an External Library) so the IDE indexes the stubs for auto-completion.
 
+### 🔌 Managing Third-Party Dependencies for External Plugins
+If your external plugins require specific third-party libraries (e.g., `requests`, `aiohttp`, etc.) that are not packaged inside the core binary, the app will automatically resolve them from a **local virtual environment (`.venv`)** placed right next to the executable.
+
+Simply make sure that a `.venv` directory containing the required modules is present in the same folder as `main.exe` (as shown in the folder tree above). On startup, the core application will automatically inject `.venv/Lib/site-packages` into its execution path to load plugin dependencies seamlessly.
+
 ## 🧩 How it works
 
 1. **Providers**: Listen to external APIs (Twitch/Discord) and push events to the `EventBus`.

@@ -1,16 +1,25 @@
 import os
+import sys
 import json
 import inspect
 import logging
 import importlib
 import asyncio
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.eventbus import bus
 from app.baseprovider import BaseProvider
 from app.baseplugin import BasePlugin
 
-IS_DEBUG = not True
+IS_DEBUG = not getattr(sys, 'frozen', False)
+BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+
+if getattr(sys, 'frozen', False):
+    local_venv = os.path.join(BASE_DIR, ".venv", "Lib", "site-packages")
+    if os.path.exists(local_venv):
+        sys.path.insert(0, local_venv)
+
 logging.basicConfig(level=logging.DEBUG if IS_DEBUG else logging.INFO)
 logger = logging.getLogger("FunnyStreamTools")
 
@@ -27,7 +36,7 @@ class FunnyStreamTools:
         self.plugin_providers_map = {}
 
     def _load_config(self) -> dict:
-        config_path = "config.json"
+        config_path = os.path.join(BASE_DIR, "config.json")
         if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -35,7 +44,7 @@ class FunnyStreamTools:
 
     def save_current_config_to_file(self):
         """Helper method for saving the current self.config to disk"""
-        with open("config.json", "w", encoding="utf-8") as f:
+        with open(os.path.join(BASE_DIR, "config.json"), "w", encoding="utf-8") as f:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
     def update_and_save_config(self, new_config: dict):
@@ -52,7 +61,7 @@ class FunnyStreamTools:
             if name in providers_config:
                 provider_instance.running = providers_config[name].get("enabled", True)
 
-        with open("config.json", "w", encoding="utf-8") as f:
+        with open(os.path.join(BASE_DIR, "config.json"), "w", encoding="utf-8") as f:
             import json
             json.dump(new_config, f, indent=2, ensure_ascii=False)
 
@@ -82,7 +91,14 @@ class FunnyStreamTools:
 
     def _discover(self, directory: str, base_class, registry: dict):
         """Universal directory scanner using inspect"""
-        if not os.path.exists(directory): return
+        full_directory_path = os.path.join(BASE_DIR, directory)
+        
+        if not os.path.exists(full_directory_path): 
+            print(f"[-] Directory not found: {full_directory_path}")
+            return
+
+        if BASE_DIR not in sys.path:
+            sys.path.insert(0, BASE_DIR)
 
         is_provider = issubclass(base_class, BaseProvider)
         layer_name = "providers" if is_provider else "plugins"
