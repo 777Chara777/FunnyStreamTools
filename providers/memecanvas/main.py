@@ -29,7 +29,12 @@ class MemeCanvasProvider(BaseProvider):
         if t == 'meme_update':
             self.canvas_state[obj_id] = data
         elif t == 'meme_move' and obj_id in self.canvas_state:
-            self.canvas_state[obj_id].update({'x': data['x'], 'y': data['y']})
+            self.canvas_state[obj_id].update({
+                'x': data['x'], 
+                'y': data['y'],
+                'size': data.get('size', self.canvas_state[obj_id].get('size', 300)),
+                'crop': data.get('crop', self.canvas_state[obj_id].get('crop', {'t':0,'r':0,'b':0,'l':0}))
+            })
         elif t == 'delete':
             self.canvas_state.pop(obj_id, None)
         elif t == 'clear_all':
@@ -105,7 +110,12 @@ class MemeCanvasProvider(BaseProvider):
                 obj_id = payload.get('id')
                 
                 if t == 'meme_move' and obj_id in self.canvas_state:
-                    self.canvas_state[obj_id].update({'x': payload['x'], 'y': payload['y']})
+                    self.canvas_state[obj_id].update({
+                        'x': payload['x'], 
+                        'y': payload['y'],
+                        'size': payload.get('size', self.canvas_state[obj_id].get('size', 300)),
+                        'crop': payload.get('crop', self.canvas_state[obj_id].get('crop', {'t':0,'r':0,'b':0,'l':0}))
+                    })
                 elif t == 'client_cursor':
                     await self.emit('client_cursor', payload)
                     

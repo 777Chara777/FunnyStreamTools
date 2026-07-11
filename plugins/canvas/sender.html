@@ -293,8 +293,13 @@
         }
         if (d.type === 'meme_update' || d.type === 'meme_move') {
             const wasHiddenChange = localState[d.id] && localState[d.id].hidden !== d.hidden;
+
+            if ((isDragging || isResizing || isCropping) && activeElement && activeElement.id === d.id) {
+                localState[d.id] = { ...localState[d.id], ...d };
+                return;
+            }
+
             localState[d.id] = d;
-            if (isDragging && activeElement?.id === d.id) return;
             if (d.hidden && wasHiddenChange) { playExitAndRemove(document.getElementById(d.id), d); }
             else renderObject(d);
             rebuildLayersPanel(); rebuildTimeline(); renderRemoteSelections();
@@ -354,15 +359,20 @@
     function renderObject(d) {
         let el = document.getElementById(d.id);
         if (!el) {
-            el = document.createElement('div'); el.id = d.id; el.className = 'meme-obj';
+            el = document.createElement('div'); 
+            el.id = d.id; 
+            el.className = 'meme-obj';
             if (d.animation && d.animation !== 'none') el.classList.add(ANIMATE_PREFIX, d.animation);
-            const resizer = document.createElement('div'); resizer.className = 'resizer'; el.appendChild(resizer);
+            
+            const resizer = document.createElement('div'); 
+            resizer.className = 'resizer'; 
 
             resizer.onmousedown = (e) => {
                 e.stopPropagation(); e.preventDefault(); isResizing = true;
                 startSize = localState[d.id].size || parseFloat(el.style.width);
                 startMouseX = e.clientX; activeElement = el;
             };
+            
             el.onmousedown = (e) => {
                 if(e.button !== 0 || isResizing || localState[d.id].locked) return;
                 e.stopPropagation();
@@ -370,11 +380,18 @@
                 if (e.shiftKey) { startCropDrag(e, el); return; }
                 isDragging = true;
                 const coords = getCanvasCoords(e);
-                dragOffsetX = coords.x - parseFloat(el.style.left); dragOffsetY = coords.y - parseFloat(el.style.top);
+                dragOffsetX = coords.x - parseFloat(el.style.left); 
+                dragOffsetY = coords.y - parseFloat(el.style.top);
             };
+            
             canvas.appendChild(el);
+            el.appendChild(resizer);
         }
+        
         updateElementVisuals(el, d);
+
+        const resizerBox = el.querySelector('.resizer');
+        if (resizerBox) el.appendChild(resizerBox);
     }
 
     function ensureObjectStyleTag(id) {
@@ -406,23 +423,44 @@
             el.insertBefore(contentNode, el.firstChild);
         }
 
-        if (el.dataset.src !== d.src || el.dataset.content !== d.content) {
-            if (d.objType === 'text') contentNode.innerHTML = `<div style="font-size:40px; color:white; font-weight:bold; text-shadow:2px 2px 4px #000; white-space:nowrap; padding:5px;">${d.content}</div>`;
-            else if (d.objType === 'iframe') contentNode.innerHTML = `<iframe src="${d.src}"></iframe>`;
-            else contentNode.innerHTML = `<img src="${d.src}">`;
-            el.dataset.src = d.src || ''; el.dataset.content = d.content || '';
+        let mediaTag = contentNode.querySelector('img, iframe, div');
+        
+        if (!mediaTag || el.dataset.objType !== d.objType) {
+            if (d.objType === 'text') {
+                contentNode.innerHTML = `<div style="width:100%; height:100%; font-size:40px; color:white; font-weight:bold; text-shadow:2px 2px 4px #000; white-space:normal; word-break:break-word; padding:5px; box-sizing:border-box;"></div>`;
+            } else if (d.objType === 'iframe') {
+                contentNode.innerHTML = `<iframe src="" style="width:100%; height:100%; border:none;"></iframe>`;
+            } else {
+                contentNode.innerHTML = `<img src="">`;
+            }
+            mediaTag = contentNode.querySelector('img, iframe, div');
+            el.dataset.objType = d.objType;
         }
 
-        el.style.left = d.x + 'px'; el.style.top = d.y + 'px'; el.style.width = d.size + 'px';
-        if(d.objType === 'iframe') el.style.height = (d.size * 0.6) + 'px';
+        if (d.objType === 'text') {
+            if (mediaTag.textContent !== d.content) mediaTag.textContent = d.content || '';
+        } else {
+            if (!mediaTag.src.includes(d.src)) mediaTag.src = d.src || '';
+        }
+        el.style.width = d.size + 'px';
+        
+        if (d.objType === 'iframe') {
+            el.style.height = (d.size * 0.6) + 'px';
+        } else {
+            el.style.height = 'auto'; 
+        }
+        
+        el.style.left = d.x + 'px'; 
+        el.style.top = d.y + 'px';
         el.style.zIndex = d.zIndex || 0;
 
-        const targetVisual = contentNode.querySelector('img, iframe, div') || contentNode;
         el.style.transform = `translate(-50%, -50%) rotate(${d.rotate || 0}deg)`;
         el.style.opacity = d.opacity !== undefined ? (d.opacity / 100) : 1;
-        targetVisual.style.borderRadius = (d.borderRadius || 0) + 'px';
-        targetVisual.style.filter = (d.blur || 0) > 0 ? `blur(${d.blur}px)` : 'none';
-        targetVisual.style.boxShadow = (d.shadow || 0) > 0 ? `0px 0px ${d.shadow}px rgba(0,0,0,0.8)` : 'none';
+        
+        mediaTag.style.borderRadius = (d.borderRadius || 0) + 'px';
+        mediaTag.style.filter = (d.blur || 0) > 0 ? `blur(${d.blur}px)` : 'none';
+        mediaTag.style.boxShadow = (d.shadow || 0) > 0 ? `0px 0px ${d.shadow}px rgba(0,0,0,0.8)` : 'none';
+        
         const crop = d.crop || {t:0,r:0,b:0,l:0};
         el.style.clipPath = `inset(${crop.t}% ${crop.r}% ${crop.b}% ${crop.l}%)`;
         el.dataset.data = JSON.stringify(d);
@@ -618,25 +656,41 @@
     viewport.addEventListener('mousemove', (e) => {
         if (e.buttons !== 1 && (isDragging || isResizing || isCropping)) { stopAllDragging(); return; }
         const coords = getCanvasCoords(e);
+        
         if (isDragging && activeElement) {
-            activeElement.style.left = (coords.x - dragOffsetX) + 'px'; activeElement.style.top = (coords.y - dragOffsetY) + 'px';
-            const d = localState[activeElement.id]; d.x = parseFloat(activeElement.style.left); d.y = parseFloat(activeElement.style.top);
-            sendSocketMessage({ type: 'meme_move', id: activeElement.id, x: newX, y: newY });
+            const newX = coords.x - dragOffsetX;
+            const newY = coords.y - dragOffsetY;
+            
+            activeElement.style.left = newX + 'px'; 
+            activeElement.style.top = newY + 'px';
+            
+            const d = localState[activeElement.id]; 
+            d.x = newX; 
+            d.y = newY;
+            
+            document.getElementById('inp-x').value = Math.round(newX); 
+            document.getElementById('inp-y').value = Math.round(newY);
+            
+            sendSocketMessage({ ...d, type: 'meme_move' });
         }
+        
         if (isResizing && activeElement) {
             const d = localState[activeElement.id]; 
             const coords = getCanvasCoords(e);
             
-            let newWidth = coords.x - d.x;
+            let newWidth = (coords.x - d.x) * 2;
 
             if (e.shiftKey) {
                 newWidth = Math.round(newWidth / 10) * 10;
             }
-            d.size = Math.max(50, newWidth); 
             
+            d.size = Math.max(50, newWidth); 
+            document.getElementById('size-slider').value = d.size;
+
             updateElementVisuals(activeElement, d);
-            sendSocketMessage({ type: 'meme_update', ...d });
+            sendSocketMessage({ ...d, type: 'meme_move' });
         }
+
         if (isCropping && activeElement) {
             const d = localState[activeElement.id];
             d.crop = d.crop || {t:0,r:0,b:0,l:0};
@@ -645,11 +699,14 @@
             const sign = (cropEdge === 't' || cropEdge === 'l') ? 1 : -1;
             const newVal = Math.max(0, Math.min(100, cropStartValue + sign * deltaPercent));
             d.crop[cropEdge] = newVal;
+            
             updateElementVisuals(activeElement, d);
             const slider = document.getElementById('crop-' + cropEdge);
             if (slider) slider.value = Math.round(newVal);
-            sendSocketMessage({ type: 'meme_move', ...d });
+            
+            sendSocketMessage({ ...d, type: 'meme_move' });
         }
+        
         if (isPanning) { panX += e.movementX; panY += e.movementY; updateTransform(); }
 
         if (window.myClientId && coords) {
@@ -677,7 +734,9 @@
     }
 
     function stopAllDragging() {
-        if ((isDragging || isResizing || isCropping) && activeElement) sendSocketMessage({type:'meme_update', ...localState[activeElement.id]});
+        if ((isDragging || isResizing || isCropping) && activeElement) {
+            sendSocketMessage({type:'meme_update', ...localState[activeElement.id]});
+        }
         isDragging = isResizing = isPanning = isCropping = false; cropEdge = null;
     }
     window.addEventListener('mouseup', stopAllDragging);
@@ -688,7 +747,12 @@
         activeElement = el; el.classList.add('active');
         document.getElementById('controls').style.display = 'block';
         sendSocketMessage({ type: 'presence_select', id: el.id });
+        
         const d = localState[el.id];
+        if (d.size === undefined || d.size === null || d.size === 0) {
+            d.size = el.offsetWidth || 300;
+        }
+        
         document.getElementById('inp-x').value = Math.round(d.x); document.getElementById('inp-y').value = Math.round(d.y);
         document.getElementById('size-slider').value = d.size;
         document.getElementById('fx-animation').value = d.animation || 'none';
