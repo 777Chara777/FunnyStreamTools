@@ -23,11 +23,10 @@ class CommandChatPlugin(BasePlugin):
             name,
             prefix,
             bus,
-            subscribed_topics,
+            ["twitch:message"],
             **kwargs
         )
 
-        self.subscribed_topics = ["twitch:message"]
         self.emote_map = {}
         self.twitch_username = os.environ.get("twitch_account", "kek")
 
@@ -37,6 +36,7 @@ class CommandChatPlugin(BasePlugin):
             self.load_ffz_emotes(self.twitch_username)
         
         print(f"Loaded {len(self.emote_map)} total emotes")
+
 
     def get_twitch_id(self, username):
         url = f"https://decapi.me/twitch/id/{username}"

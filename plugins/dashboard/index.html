@@ -10,6 +10,8 @@
             --bg-input: #1f1f26;
             --accent-green: #00ff88;
             --accent-orange: #ff9900;
+            --accent-red: #ea580c;
+            --accent-blue: #3b82f6;
             --text-main: #e2e8f0;
             --text-muted: #64748b;
             --border: #2a2a35;
@@ -67,9 +69,21 @@
             padding: 20px; 
             margin-bottom: 15px; 
             border-radius: 8px; 
-            transition: border-color 0.2s, transform 0.2s;
+            transition: all 0.2s ease;
         }
         .card:hover { border-color: #3f3f50; }
+
+        .card.status-warning {
+            border-color: rgba(255, 153, 0, 0.4);
+            background: linear-gradient(180deg, var(--bg-card) 0%, rgba(255, 153, 0, 0.03) 100%);
+        }
+        .card.status-warning:hover { border-color: var(--accent-orange); }
+
+        .card.status-danger {
+            border-color: rgba(234, 88, 12, 0.4);
+            background: linear-gradient(180deg, var(--bg-card) 0%, rgba(234, 88, 12, 0.03) 100%);
+        }
+        .card.status-danger:hover { border-color: var(--accent-red); }
 
         .row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; }
         .row:first-child { margin-top: 0; }
@@ -77,6 +91,50 @@
 
         .card-title { font-weight: 700; font-size: 15px; letter-spacing: 0.5px; color: #fff; }
         .label-text { color: var(--text-muted); font-size: 14px; }
+
+        .card-footer-providers {
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .providers-title {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .badge.active {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+        .badge.inactive {
+            background: rgba(234, 88, 12, 0.1);
+            color: var(--accent-red);
+            border: 1px solid rgba(234, 88, 12, 0.2);
+        }
+        .badge.none {
+            background: rgba(100, 116, 139, 0.1);
+            color: var(--text-muted);
+            border: 1px solid rgba(100, 116, 139, 0.2);
+        }
 
         select { 
             background: var(--bg-input); 
@@ -167,20 +225,27 @@
 
     <script>
         let currentConfig = {};
+        let cachedThemes = {};
+        let backendPluginProviders = {};
 
         async function loadDashboard() {
             try {
                 const res = await fetch('/widget/dashboard/api/config');
                 const data = await res.json();
                 currentConfig = data.config;
+                cachedThemes = data.available_themes || {};
+                backendPluginProviders = data.plugin_providers || {};
                 
-                renderPlugins(data.config.plugins, data.available_themes);
-                renderProviders(data.config.providers);
-                
+                refreshUI();
                 document.getElementById('status-msg').innerText = "Configuration loaded successfully.";
             } catch (e) {
                 document.getElementById('status-msg').innerText = "Data loading error.";
             }
+        }
+
+        function refreshUI() {
+            renderPlugins(currentConfig.plugins, cachedThemes, currentConfig.providers || {});
+            renderProviders(currentConfig.providers);
         }
 
         async function reloadModules() {
@@ -191,7 +256,7 @@
             setTimeout(loadDashboard, 1000);
         }
 
-        function renderPlugins(plugins, themes) {
+        function renderPlugins(plugins, themes, globalProviders) {
             const container = document.getElementById('plugins-container');
             container.innerHTML = '';
             
@@ -203,18 +268,54 @@
                     `<option value="${t}" ${p.current_theme === t ? 'selected' : ''}>${t}</option>`
                 ).join('');
 
+                const requiredProviders = backendPluginProviders[name] || [];
+                let badgesHtml = '';
+                let cardStatusClass = ''; 
+                
+                if (requiredProviders.length > 0) {
+                    let activeCount = 0;
+                    let inactiveCount = 0;
+
+                    badgesHtml = requiredProviders.map(prov => {
+                        const lowerProv = prov.toLowerCase();
+                        
+                        const isExistInConfig = globalProviders[lowerProv] !== undefined;
+                        const isEnabled = isExistInConfig ? globalProviders[lowerProv].enabled : true;
+                        
+                        if (isEnabled) {
+                            activeCount++;
+                            return `<span class="badge active">● ${prov}</span>`;
+                        } else {
+                            inactiveCount++;
+                            return `<span class="badge inactive">○ ${prov}</span>`;
+                        }
+                    }).join('');
+
+                    if (activeCount === 0 && inactiveCount > 0) {
+                        cardStatusClass = 'status-danger'; 
+                    } else if (inactiveCount > 0) {
+                        cardStatusClass = 'status-warning'; 
+                    }
+                } else {
+                    badgesHtml = '<span class="badge none">standalone</span>';
+                }
+
                 container.innerHTML += `
-                    <div class="card">
+                    <div class="card ${cardStatusClass}">
                         <div class="row">
                             <span class="card-title">${name.toUpperCase()}</span>
                             <label class="switch">
-                                <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="currentConfig.plugins['${name}'].enabled = this.checked">
+                                <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="currentConfig.plugins['${name}'].enabled = this.checked; refreshUI();">
                                 <span class="slider"></span>
                             </label>
                         </div>
                         <div class="row">
                             <span class="label-text">Select HTML style:</span>
                             <select onchange="currentConfig.plugins['${name}'].current_theme = this.value">${options}</select>
+                        </div>
+                        <div class="card-footer-providers">
+                            <span class="providers-title">Providers:</span>
+                            ${badgesHtml}
                         </div>
                     </div>
                 `;
@@ -232,12 +333,19 @@
                         <div class="row">
                             <span class="card-title">${name.toUpperCase()}</span>
                             <label class="switch">
-                                <input type="checkbox" ${prov.enabled ? 'checked' : ''} onchange="currentConfig.providers['${name}'].enabled = this.checked">
+                                <input type="checkbox" ${prov.enabled ? 'checked' : ''} onchange="toggleProviderState('${name}', this.checked)">
                                 <span class="slider"></span>
                             </label>
                         </div>
                     </div>
                 `;
+            }
+        }
+
+        function toggleProviderState(providerName, isChecked) {
+            if (currentConfig.providers[providerName]) {
+                currentConfig.providers[providerName].enabled = isChecked;
+                refreshUI(); 
             }
         }
 

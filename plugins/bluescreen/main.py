@@ -16,8 +16,7 @@ class BlueScreenMeme(BasePlugin):
             subscribed_topics: list,
             **kwargs
         ):
-        super().__init__( name, prefix, bus, subscribed_topics, **kwargs)
-        self.subscribed_topics = ["twitch:message"]
+        super().__init__( name, prefix, bus, ["twitch:message"], **kwargs)
     
     def handle_payload( self, payload: dict ) -> dict:
 

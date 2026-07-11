@@ -24,6 +24,8 @@ class FunnyStreamTools:
         self.background_tasks = []
         self.config = self._load_config()
 
+        self.plugin_providers_map = {}
+
     def _load_config(self) -> dict:
         config_path = "config.json"
         if os.path.exists(config_path):
@@ -103,8 +105,22 @@ class FunnyStreamTools:
                     config_changed = True
                 
                 module_config = config_group[name]
-                if not module_config.get("enabled", True):
+                is_enabled = module_config.get("enabled", True)
+
+                if not is_provider and not is_enabled:
                     print(f"[-] [{layer_name.upper()}] Skipped (disabled in config): {name}")
+                    try:
+                        module = importlib.import_module(f"{layer_name}.{name}.main")
+                        providers_found = set()
+                        for _, obj in inspect.getmembers(module):
+                            if inspect.isclass(obj) and issubclass(obj, base_class) and obj is not base_class:
+                                topics = getattr(obj, 'subscribed_topics', []) or getattr(obj, 'trigger_topics', [])
+                                for t in (topics or []):
+                                    if ":" in t:
+                                        providers_found.add(t.split(':')[0].lower())
+                        self.plugin_providers_map[name] = list(providers_found)
+                    except Exception as e:
+                        logger.debug(f"Static pre-scan error for disabled {name}: {e}")
                     continue
 
                 if name in registry:
@@ -117,19 +133,29 @@ class FunnyStreamTools:
                             
                             if is_provider:
                                 instance = obj(provider_id=name, bus=bus)
+                                registry[name] = instance
+                                print(f"[+] [{layer_name.upper()}] Init class {obj.__name__}")
                             else:
                                 current_theme = module_config.get("current_theme", "index.html")
                                 instance = obj(
                                     name=name, 
                                     prefix=f"/widget/{name}",
                                     bus=bus,
-                                    subscribed_topics=None,
+                                    subscribed_topics=[],
                                     current_theme=current_theme
                                 )
                                 self.app.include_router(instance.router)
-                            
-                            registry[name] = instance
-                            print(f"[+] [{layer_name.upper()}] Init class {obj.__name__}")
+                                registry[name] = instance
+                                print(f"[+] [{layer_name.upper()}] Init class {obj.__name__}")
+                                
+                                providers_found = set()
+                                topics = getattr(instance, 'subscribed_topics', []) or getattr(instance, 'trigger_topics', [])
+                                for t in (topics or []):
+                                    if ":" in t:
+                                        providers_found.add(t.split(':')[0].lower())
+                                
+                                self.plugin_providers_map[name] = list(providers_found)
+                                
                 except Exception as e:
                     print(f"[-] Error loading layer {layer_name} ({name}): {e}")
 
