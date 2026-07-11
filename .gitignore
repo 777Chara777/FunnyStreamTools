@@ -13,3 +13,5 @@ token_*.json
 trash/
 test.py
 config.json
+
+uploads/
