@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html style="background: transparent; overflow: hidden;">
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <style id="global-custom-css"></style>
+</head>
+<body style="margin: 0; width: 1920px; height: 1080px; position: relative;">
+    <div id="scene"></div>
+
+    <script>
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsPath = window.location.pathname.endsWith('/') ? window.location.pathname + 'ws' : window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/ws';
+        const socket = new WebSocket(`${wsProtocol}${window.location.host}${wsPath}`);
+        const scene = document.getElementById('scene');
+        const globalCssTag = document.getElementById('global-custom-css');
+
+        const ANIMATE_PREFIX = 'animate__animated';
+
+        function ensureObjectStyleTag(id) {
+            let tag = document.getElementById('css-' + id);
+            if (!tag) {
+                tag = document.createElement('style');
+                tag.id = 'css-' + id;
+                document.head.appendChild(tag);
+            }
+            return tag;
+        }
+
+        function applyBaseStyles(el, d) {
+            el.style.left = d.x + 'px'; el.style.top = d.y + 'px'; el.style.width = d.size + 'px'; el.style.zIndex = d.zIndex || 0;
+            if (d.objType === 'iframe') el.style.height = (d.size * 0.6) + 'px';
+
+            const content = el.querySelector('.obs-content') || el;
+            el.style.transform = `translate(-50%, -50%) rotate(${d.rotate || 0}deg)`;
+            el.style.opacity = d.opacity !== undefined ? (d.opacity / 100) : 1;
+
+            content.style.borderRadius = (d.borderRadius || 0) + 'px';
+            content.style.filter = (d.blur || 0) > 0 ? `blur(${d.blur}px)` : 'none';
+            content.style.boxShadow = (d.shadow || 0) > 0 ? `0px 0px ${d.shadow}px rgba(0,0,0,0.8)` : 'none';
+
+            const crop = d.crop || {t: 0, r: 0, b: 0, l: 0};
+            el.style.clipPath = `inset(${crop.t}% ${crop.r}% ${crop.b}% ${crop.l}%)`;
+
+            ensureObjectStyleTag(d.id).textContent = `#${d.id} .obs-content { ${d.customCss || ''} }`;
+        }
+
+        function removeElement(id) {
+            document.getElementById(id)?.remove();
+            document.getElementById('css-' + id)?.remove();
+        }
+
+        function playExitAndRemove(el, d) {
+            const outClass = d.animationOut;
+            if (!outClass || outClass === 'none') { removeElement(d.id); return; }
+
+            el.classList.remove(...[...el.classList].filter(c => c.startsWith('animate__') && c !== ANIMATE_PREFIX));
+            el.classList.add(ANIMATE_PREFIX, outClass);
+
+            const onEnd = () => { el.removeEventListener('animationend', onEnd); removeElement(d.id); };
+            el.addEventListener('animationend', onEnd);
+            setTimeout(() => removeElement(d.id), 3000);
+        }
+
+        socket.onmessage = (event) => {
+            const d = JSON.parse(event.data);
+            if (!d) return; 
+
+            if (d.type === 'init_state') {
+                scene.innerHTML = '';
+                globalCssTag.textContent = d.css || '';
+                d.objects.forEach(obj => { socket.onmessage({ data: JSON.stringify({ type: 'meme_update', ...obj }) }); });
+                return;
+            }
+
+            if (d.type === 'set_global_css') { globalCssTag.textContent = d.css || ''; return; }
+            if (d.type === 'delete') { removeElement(d.id); return; }
+            if (d.type === 'clear_all') { scene.innerHTML = ''; return; }
+
+            if (d.type === 'meme_move' || d.type === 'meme_update') {
+                let el = document.getElementById(d.id);
+
+                if (d.hidden) {
+                    if (el) playExitAndRemove(el, d);
+                    return;
+                }
+
+                if (!el) {
+                    el = document.createElement('div'); el.id = d.id; el.style.position = 'absolute';
+
+                    // Эффектная анимация появления
+                    if (d.animation && d.animation !== 'none') {
+                        el.classList.add(ANIMATE_PREFIX, d.animation);
+                    }
+
+                    if (d.objType === 'text') {
+                        const content = document.createElement('div'); content.className = 'obs-content';
+                        content.style.color = 'white'; content.style.fontSize = '40px'; content.style.fontWeight = 'bold';
+                        content.style.textShadow = '2px 2px 4px #000'; content.style.whiteSpace = 'nowrap';
+                        el.appendChild(content);
+                    } else {
+                        const content = document.createElement(d.objType === 'iframe' ? 'iframe' : 'img');
+                        content.className = 'obs-content'; content.src = d.src; content.style.width = '100%'; content.style.height = '100%';
+                        if (d.objType === 'iframe') content.style.border = 'none';
+                        el.appendChild(content);
+                    }
+                    scene.appendChild(el);
+                }
+
+                if (d.objType === 'text') el.querySelector('.obs-content').textContent = d.content;
+                applyBaseStyles(el, d);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meme Figma Pro Studio</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <style id="global-custom-css-editor-preview"></style>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #121214; color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+        .layers-panel { width: 260px; background: #1a1a1e; border-right: 1px solid #29292e; padding: 15px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; overflow-y: auto; }
+        .layer-item { background: #222226; padding: 6px 8px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; cursor: pointer; border: 1px solid transparent; transition: 0.2s; gap: 6px; }
+        .layer-item:hover { background: #29292e; }
+        .layer-item.active { border-color: #5865F2; background: #23243c; }
+        .layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-grow: 1; }
+        .layer-controls { display: flex; gap: 3px; flex-shrink: 0; }
+        .layer-btn { background: transparent; border: none; color: #888; cursor: pointer; padding: 2px; width: auto; font-size: 12px; }
+        .layer-btn:hover { color: #fff; }
+        .hotkey-badge { background: #5865F2; color: white; font-size: 10px; padding: 1px 5px; border-radius: 4px; flex-shrink: 0; }
+
+        .main-workspace { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; position: relative; min-width: 0; }
+
+        .toolbar { height: 50px; background: #1a1a1e; border-bottom: 1px solid #29292e; display: flex; align-items: center; padding: 0 15px; gap: 10px; z-index: 10; flex-shrink: 0; }
+
+        .sidebar { width: 300px; background: #1a1a1e; border-left: 1px solid #29292e; padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; box-sizing: border-box; }
+
+        #viewport { flex-grow: 1; position: relative; overflow: hidden; cursor: grab; background-color: #121214; background-image: radial-gradient(#29292e 1px, transparent 1px); background-size: 20px 20px; min-height: 0; }
+        #canvas { position: absolute; transform-origin: 0 0; width: 1px; height: 1px; }
+        #stream-bounds { position: absolute; border: 3px dashed #5865F2; pointer-events: none; box-sizing: border-box; }
+
+        .meme-obj { position: absolute; transform: translate(-50%, -50%); cursor: move; border: 2px solid transparent; background: rgba(255,255,255,0.02); user-select: none; }
+        .meme-obj.active { border: 2px solid #5865F2; }
+        .meme-obj.locked { pointer-events: none !important; }
+        .meme-obj img, .meme-obj iframe { width: 100%; height: 100%; display: block; pointer-events: none; }
+
+        .resizer { position: absolute; width: 10px; height: 10px; background: #5865F2; border: 2px solid white; right: -5px; bottom: -5px; cursor: nwse-resize; display: none; }
+        .meme-obj.active .resizer { display: block; }
+        .resize-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: #bc13fe; cursor: nwse-resize; z-index: 10; }
+
+        input, button, textarea, select { background: #222226; border: 1px solid #29292e; color: white; padding: 6px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 13px; font-family: inherit; }
+        textarea { font-family: 'Consolas', monospace; resize: vertical; }
+        button { background: #5865F2; font-weight: bold; cursor: pointer; border: none; }
+        button:hover { background: #4752c4; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+
+        .section-title { font-size: 11px; font-weight: bold; color: #8a8e94; text-transform: uppercase; margin-top: 10px; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; }
+        .control-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+        .control-row label { width: 90px; flex-shrink: 0; color: #b9bbbe; }
+
+        .scene-chip { background: #222226; border: 1px solid #29292e; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+        .scene-chip:hover { border-color: #5865F2; }
+        .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        #presence-widget { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 11px; color: #b9bbbe; width: auto; }
+        .presence-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #1a1a1e; margin-left: -6px; display: inline-block; }
+        .presence-dot:first-child { margin-left: 0; }
+        .remote-tag { position: absolute; top: -18px; left: 0; font-size: 10px; padding: 1px 6px; border-radius: 4px; color: #111; font-weight: bold; white-space: nowrap; pointer-events: none; z-index: 999; }
+
+        .hotkey-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; background: #222226; padding: 4px 8px; border-radius: 5px; }
+        .hotkey-row .key { background: #29292e; padding: 1px 6px; border-radius: 4px; color: #5865F2; font-weight: bold; }
+        .hotkey-static { font-size: 11px; color: #8a8e94; line-height: 1.7; }
+        .hotkey-static b { color: #b9bbbe; background: #222226; padding: 0 4px; border-radius: 3px; }
+
+        #timeline-panel { flex-shrink: 0; background: #17171a; border-top: 1px solid #29292e; box-sizing: border-box; transition: height 0.15s; overflow: hidden; }
+        #timeline-panel.collapsed { height: 34px !important; }
+        .timeline-header { height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid #29292e; }
+        .timeline-header .section-title { margin: 0; }
+        .timeline-header button, .timeline-header input { width: auto; }
+        #timeline-body { padding: 8px 12px; overflow-y: auto; }
+        .tl-ruler { position: relative; height: 16px; margin-left: 130px; border-bottom: 1px solid #29292e; margin-bottom: 4px; font-size: 9px; color: #666; }
+        .tl-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
+        .tl-row { display: flex; align-items: center; height: 26px; gap: 8px; margin-bottom: 3px; }
+        .tl-label { width: 122px; flex-shrink: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tl-track { position: relative; flex-grow: 1; height: 20px; background: #1f1f24; border-radius: 4px; }
+        .tl-bar { position: absolute; top: 2px; height: 16px; background: #5865F2; border-radius: 3px; cursor: grab; min-width: 6px; }
+        .tl-bar.infinite { background: linear-gradient(90deg, #5865F2, rgba(88,101,242,0.15)); }
+        .tl-bar .tl-resize { position: absolute; right: -3px; top: 0; width: 8px; height: 100%; cursor: ew-resize; }
+        .tl-bar.selected { outline: 2px solid #fff; }
+
+        .remote-cursor { position: absolute; pointer-events: none; z-index: 100000; transition: left 0.1s linear, top 0.1s linear; }
+        .cursor-label { position: absolute; left: 12px; top: 15px; background: #ff007f; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+<div class="layers-panel">
+    <div class="section-title">Сохраненные Сцены</div>
+    <div style="display: flex; gap: 5px;">
+        <input type="text" id="scene-name-input" placeholder="Имя сцены" value="main_overlay">
+        <button onclick="saveScene()" style="width: auto; background: #4caf50;">💾</button>
+        <button onclick="loadScene()" style="width: auto; background: #ff9800;">📂</button>
+    </div>
+    <div class="chip-row" id="scene-gallery"></div>
+
+    <div class="section-title" style="margin-top: 10px;">
+        <span>Глобальный CSS сцены</span>
+        <button onclick="toggleGlobalCssPanel()" style="width:auto; background:transparent; color:#8a8e94; padding:0;">▾</button>
+    </div>
+    <div id="global-css-panel" style="display:none; flex-direction:column; gap:6px;">
+        <textarea id="global-css-input" rows="4" placeholder="#obj_123 { filter: sepia(1); } ..."></textarea>
+        <button onclick="applyGlobalCss()" style="background:#4caf50;">Применить ко всей сцене</button>
+    </div>
+
+    <div class="section-title" style="margin-top: 10px;">
+        <span>⌨ Хоткеи</span>
+        <button onclick="toggleHotkeysPanel()" style="width:auto; background:transparent; color:#8a8e94; padding:0;">▾</button>
+    </div>
+    <div id="hotkeys-panel" style="display:none; flex-direction:column; gap:6px;">
+        <div class="hotkey-static">
+            <div><b>Del</b> — удалить слой</div>
+            <div><b>Ctrl+D</b> — дублировать слой</div>
+            <div><b>Ctrl+C / Ctrl+V</b> — копировать/вставить стиль</div>
+            <div><b>Ctrl+Z</b> — вернуть удалённый слой</div>
+            <div><b>Ctrl+S</b> — сохранить сцену</div>
+            <div><b>Стрелки</b> — сдвиг на 1px (Shift = 10px)</div>
+            <div><b>Esc</b> — снять выделение</div>
+            <div><b>Shift + Перетаскивание</b> — обрезка (crop)</div>
+        </div>
+        <div class="section-title" style="margin-top:4px;">Привязки к слоям</div>
+        <div id="hotkeys-bindings" style="display:flex; flex-direction:column; gap:4px;"></div>
+    </div>
+
+    <div class="section-title" style="margin-top: 15px;">Слои (Layers)</div>
+    <div id="layers-container" style="display: flex; flex-direction: column; gap: 5px;">
+    </div>
+</div>
+
+<div class="main-workspace">
+    <div class="toolbar">
+        <div style="width: 200px;"><input type="text" id="url-input" placeholder="Добавить URL картинки + Enter"></div>
+        <button onclick="addObject('text')" style="width:auto; background:#4caf50;">+ Текст</button>
+        <button onclick="addObject('iframe')" style="width:auto; background:#ff9800;">+ Web Source</button>
+        <button onclick="document.getElementById('file-input').click()" style="width:auto; background:#29292e;">📁 Загрузить файл</button>
+        <input type="file" id="file-input" style="display:none;" onchange="handleFile(this)">
+        <button onclick="clearAll()" style="width:auto; background:#ed4245; margin-left:auto;">Очистить всё</button>
+        <div id="presence-widget" title="Кто сейчас онлайн">
+            <span id="presence-count">1</span> онлайн
+            <span id="presence-list" style="display:flex;"></span>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="canvas">
+            <div id="stream-bounds" data-label="STREAM"></div>
+        </div>
+    </div>
+
+    <div id="timeline-panel" style="height: 220px;">
+        <div class="timeline-header">
+            <div class="section-title" style="flex-shrink:0;">⏱ Таймлайн</div>
+            <button onclick="playTimeline()" style="background:#4caf50;">▶ Играть</button>
+            <button onclick="stopTimeline()" style="background:#ed4245;">⏹ Стоп</button>
+            <label style="font-size:11px; color:#8a8e94; display:flex; align-items:center; gap:4px; width:auto;">
+                Длина (сек): <input type="number" id="tl-length" value="15" min="2" max="120" style="width:60px;" onchange="rebuildTimeline()">
+            </label>
+            <button onclick="toggleTimelinePanel()" style="width:auto; background:transparent; color:#8a8e94; margin-left:auto;" id="tl-collapse-btn">▾ Свернуть</button>
+        </div>
+        <div id="timeline-body">
+            <div class="tl-ruler" id="tl-ruler"></div>
+            <div id="tl-rows"></div>
+        </div>
+    </div>
+</div>
+
+<div class="sidebar">
+    <div id="controls" style="display: none;">
+        <div class="section-title">Геометрия</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+            <input type="number" id="inp-x" onchange="manualUpdate()">
+            <input type="number" id="inp-y" onchange="manualUpdate()">
+        </div>
+        <div class="control-row"><label>Размер:</label><input type="range" id="size-slider" min="50" max="1500" oninput="manualUpdate()"></div>
+
+        <div class="section-title">Анимация Входа / Выхода</div>
+        <div class="control-row"><label>Появление:</label>
+            <select id="fx-animation" onchange="manualUpdate()">
+                <option value="none">Без анимации</option>
+                <option value="animate__fadeIn">Fade In</option>
+                <option value="animate__bounceIn">Bounce In</option>
+                <option value="animate__slideInLeft">Slide Left</option>
+                <option value="animate__zoomIn">Zoom In</option>
+            </select>
+        </div>
+        <div class="control-row"><label>Исчезновение:</label>
+            <select id="fx-animation-out" onchange="manualUpdate()">
+                <option value="none">Без анимации</option>
+                <option value="animate__fadeOut">Fade Out</option>
+                <option value="animate__bounceOut">Bounce Out</option>
+                <option value="animate__slideOutRight">Slide Right</option>
+                <option value="animate__zoomOut">Zoom Out</option>
+            </select>
+        </div>
+
+        <div class="section-title">Таймлайн слоя</div>
+        <div class="control-row"><label>Задержка (мс):</label><input type="number" id="fx-delay" min="0" step="100" onchange="manualUpdate(); rebuildTimeline();"></div>
+        <div class="control-row"><label>Длительность (мс):</label><input type="number" id="fx-duration" min="0" step="100" placeholder="0 = не скрывать" onchange="manualUpdate(); rebuildTimeline();"></div>
+
+        <div class="section-title">Хоткей & Автоматизация</div>
+        <div class="control-row">
+            <label>Клавиша:</label>
+            <input type="text" id="fx-hotkey" placeholder="Нажмите клавишу..." readonly onclick="bindHotkey(this)">
+        </div>
+        <div class="control-row">
+            <label>Триггер события:</label>
+            <select id="fx-trigger" onchange="manualUpdate()">
+                <option value="none">Нет</option>
+                <option value="donation:alert">Донат (Тест)</option>
+                <option value="twitch:chat_command">Команда чата</option>
+            </select>
+        </div>
+        <div class="control-row"><label>Показ триггера (сек):</label><input type="number" id="fx-trigger-duration" min="0" step="1" placeholder="5" onchange="manualUpdate()"></div>
+
+        <div class="section-title">OBS Crop</div>
+        <div class="control-row"><label>Top:</label><input type="range" id="crop-t" min="0" max="100" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Right:</label><input type="range" id="crop-r" min="0" max="100" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Bottom:</label><input type="range" id="crop-b" min="0" max="100" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Left:</label><input type="range" id="crop-l" min="0" max="100" oninput="manualUpdate()"></div>
+
+        <div class="section-title">Figma CSS Стили</div>
+        <div class="control-row"><label>Поворот°:</label><input type="range" id="fx-rotate" min="-180" max="180" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Opacity:</label><input type="range" id="fx-opacity" min="0" max="100" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Скругление:</label><input type="range" id="fx-radius" min="0" max="200" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Blur:</label><input type="range" id="fx-blur" min="0" max="30" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Тень:</label><input type="range" id="fx-shadow" min="0" max="50" oninput="manualUpdate()"></div>
+
+        <div class="section-title">Кастомный CSS слоя</div>
+        <textarea id="fx-customcss" rows="3" placeholder="filter: grayscale(1); border: 2px solid red;" oninput="manualUpdate()"></textarea>
+
+        <div id="text-only-controls" style="display:none;">
+            <div class="section-title">Контент Текста</div>
+            <textarea id="text-content-input"></textarea>
+        </div>
+
+        <div class="section-title">Удобные функции</div>
+        <div class="btn-group">
+            <button onclick="duplicateActive()" style="background:#29292e;">⎘ Дублировать</button>
+            <button onclick="centerActive()" style="background:#29292e;">🎯 По центру</button>
+            <button onclick="copyStyle()" style="background:#29292e;">📋 Копировать стиль</button>
+            <button onclick="pasteStyle()" style="background:#29292e;">📥 Вставить стиль</button>
+        </div>
+
+        <button onclick="deleteActive()" style="background:#ed4245; margin-top:15px;">Удалить слой</button>
+    </div>
+</div>
+
+<script>
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const wsPath = window.location.pathname.endsWith('/') ? window.location.pathname + 'ws' : window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/ws';
+    const socket = new WebSocket(`${wsProtocol}${window.location.host}${wsPath}`);
+
+    window.myClientId = 'user_' + Math.random().toString(36).substr(2, 9);
+
+    const viewport = document.getElementById('viewport');
+    const canvas = document.getElementById('canvas');
+    let scale = 0.5, panX = 150, panY = 150;
+    let isPanning = false, isDragging = false, isResizing = false;
+    let activeElement = null;
+    let dragOffsetX = 0, dragOffsetY = 0, startSize = 0, startMouseX = 0;
+    let localState = {};
+    let canvasBounds = { width: 1920, height: 1080 };
+    const ANIMATE_PREFIX = 'animate__animated';
+
+    let isCropping = false, cropEdge = null, cropStartValue = 0, cropStartMouse = 0, cropAxisSize = 1;
+
+    let styleClipboard = null;
+    let lastDeleted = null;
+
+    let myIdentity = null;
+    let remoteUsers = [];
+    let remoteSelections = {}; 
+
+    function sendSocketMessage(data) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); }
+
+    function basePath() { return window.location.pathname.replace(/\/admin\/?$/, '/'); }
+
+    socket.onmessage = (event) => {
+        const d = JSON.parse(event.data);
+        if (!d) return;
+
+        if (d.type === 'init_state') {
+            const sb = document.getElementById('stream-bounds');
+            canvasBounds = d.bounds;
+            sb.style.width = d.bounds.width + 'px'; sb.style.height = d.bounds.height + 'px';
+            canvas.querySelectorAll('.meme-obj').forEach(m => m.remove());
+            localState = {};
+            d.objects.forEach(obj => { localState[obj.id] = obj; renderObject(obj); });
+            document.getElementById('global-css-input').value = d.css || '';
+            document.getElementById('global-custom-css-editor-preview').textContent = d.css || '';
+            rebuildLayersPanel(); rebuildTimeline();
+        }
+        if (d.type === 'set_global_css') {
+            document.getElementById('global-css-input').value = d.css || '';
+            document.getElementById('global-custom-css-editor-preview').textContent = d.css || '';
+        }
+        if (d.type === 'meme_update' || d.type === 'meme_move') {
+            const wasHiddenChange = localState[d.id] && localState[d.id].hidden !== d.hidden;
+            localState[d.id] = d;
+            if (isDragging && activeElement?.id === d.id) return;
+            if (d.hidden && wasHiddenChange) { playExitAndRemove(document.getElementById(d.id), d); }
+            else renderObject(d);
+            rebuildLayersPanel(); rebuildTimeline(); renderRemoteSelections();
+        }
+        if (d.type === 'delete') {
+            delete localState[d.id];
+            if (activeElement?.id === d.id) { activeElement = null; document.getElementById('controls').style.display = 'none'; }
+            document.getElementById(d.id)?.remove();
+            document.getElementById('css-' + d.id)?.remove();
+            rebuildLayersPanel(); rebuildTimeline();
+        }
+        if (d.type === 'clear_all') {
+            localState = {}; canvas.querySelectorAll('.meme-obj').forEach(m => m.remove());
+            activeElement = null; document.getElementById('controls').style.display = 'none';
+            rebuildLayersPanel(); rebuildTimeline();
+        }
+
+        if (d.type === 'presence_you') { myIdentity = d.you; renderPresence(); }
+        if (d.type === 'presence_list') {
+            remoteUsers = (d.users || []).filter(u => !myIdentity || u.id !== myIdentity.id);
+            renderPresence();
+        }
+        if (d.type === 'presence_select') {
+            if (d.id) remoteSelections[d.user.id] = { objId: d.id, name: d.user.name, color: d.user.color };
+            else delete remoteSelections[d.user.id];
+            renderRemoteSelections();
+        }
+        if (d.type === 'client_cursor') {
+            if (d.clientId === window.myClientId) return; 
+
+            let cursorEl = document.getElementById(`cursor-${d.clientId}`);
+            if (!cursorEl) {
+                cursorEl = document.createElement('div');
+                cursorEl.id = `cursor-${d.clientId}`;
+                cursorEl.className = 'remote-cursor';
+                cursorEl.innerHTML = `
+                    <svg width="14" height="20" viewBox="0 0 14 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0 0V19L5 14L8.5 20L11.5 18.5L8 12.5L13.5 12L0 0Z" fill="#ff007f"/>
+                    </svg>
+                    <span class="cursor-label">User 228</span>
+                `;
+                canvas.appendChild(cursorEl);
+            }
+            cursorEl.style.left = d.x + 'px';
+            cursorEl.style.top = d.y + 'px';
+            
+            clearTimeout(cursorEl.timeout);
+            cursorEl.timeout = setTimeout(() => cursorEl.remove(), 3000);
+        }
+    };
+
+    function getCanvasCoords(e) {
+        const rect = viewport.getBoundingClientRect();
+        return { x: (e.clientX - rect.left - panX) / scale, y: (e.clientY - rect.top - panY) / scale };
+    }
+
+    function renderObject(d) {
+        let el = document.getElementById(d.id);
+        if (!el) {
+            el = document.createElement('div'); el.id = d.id; el.className = 'meme-obj';
+            if (d.animation && d.animation !== 'none') el.classList.add(ANIMATE_PREFIX, d.animation);
+            const resizer = document.createElement('div'); resizer.className = 'resizer'; el.appendChild(resizer);
+
+            resizer.onmousedown = (e) => {
+                e.stopPropagation(); e.preventDefault(); isResizing = true;
+                startSize = localState[d.id].size || parseFloat(el.style.width);
+                startMouseX = e.clientX; activeElement = el;
+            };
+            el.onmousedown = (e) => {
+                if(e.button !== 0 || isResizing || localState[d.id].locked) return;
+                e.stopPropagation();
+                selectElement(el);
+                if (e.shiftKey) { startCropDrag(e, el); return; }
+                isDragging = true;
+                const coords = getCanvasCoords(e);
+                dragOffsetX = coords.x - parseFloat(el.style.left); dragOffsetY = coords.y - parseFloat(el.style.top);
+            };
+            canvas.appendChild(el);
+        }
+        updateElementVisuals(el, d);
+    }
+
+    function ensureObjectStyleTag(id) {
+        let tag = document.getElementById('css-' + id);
+        if (!tag) { tag = document.createElement('style'); tag.id = 'css-' + id; document.head.appendChild(tag); }
+        return tag;
+    }
+
+    function removeElement(id) { document.getElementById(id)?.remove(); document.getElementById('css-' + id)?.remove(); }
+
+    function playExitAndRemove(el, d) {
+        if (!el) return;
+        const outClass = d.animationOut;
+        if (!outClass || outClass === 'none') { removeElement(d.id); return; }
+        el.classList.remove(...[...el.classList].filter(c => c.startsWith('animate__') && c !== ANIMATE_PREFIX));
+        el.classList.add(ANIMATE_PREFIX, outClass);
+        const onEnd = () => { el.removeEventListener('animationend', onEnd); removeElement(d.id); };
+        el.addEventListener('animationend', onEnd);
+        setTimeout(() => removeElement(d.id), 3000);
+    }
+
+    function updateElementVisuals(el, d) {
+        if (d.hidden) { el.style.display = 'none'; return; } else { el.style.display = 'block'; }
+
+        let contentNode = el.querySelector('.content-node');
+        if (!contentNode) {
+            contentNode = document.createElement('div'); contentNode.className = 'content-node';
+            contentNode.style.width = "100%"; contentNode.style.height = "100%";
+            el.insertBefore(contentNode, el.firstChild);
+        }
+
+        if (el.dataset.src !== d.src || el.dataset.content !== d.content) {
+            if (d.objType === 'text') contentNode.innerHTML = `<div style="font-size:40px; color:white; font-weight:bold; text-shadow:2px 2px 4px #000; white-space:nowrap; padding:5px;">${d.content}</div>`;
+            else if (d.objType === 'iframe') contentNode.innerHTML = `<iframe src="${d.src}"></iframe>`;
+            else contentNode.innerHTML = `<img src="${d.src}">`;
+            el.dataset.src = d.src || ''; el.dataset.content = d.content || '';
+        }
+
+        el.style.left = d.x + 'px'; el.style.top = d.y + 'px'; el.style.width = d.size + 'px';
+        if(d.objType === 'iframe') el.style.height = (d.size * 0.6) + 'px';
+        el.style.zIndex = d.zIndex || 0;
+
+        const targetVisual = contentNode.querySelector('img, iframe, div') || contentNode;
+        el.style.transform = `translate(-50%, -50%) rotate(${d.rotate || 0}deg)`;
+        el.style.opacity = d.opacity !== undefined ? (d.opacity / 100) : 1;
+        targetVisual.style.borderRadius = (d.borderRadius || 0) + 'px';
+        targetVisual.style.filter = (d.blur || 0) > 0 ? `blur(${d.blur}px)` : 'none';
+        targetVisual.style.boxShadow = (d.shadow || 0) > 0 ? `0px 0px ${d.shadow}px rgba(0,0,0,0.8)` : 'none';
+        const crop = d.crop || {t:0,r:0,b:0,l:0};
+        el.style.clipPath = `inset(${crop.t}% ${crop.r}% ${crop.b}% ${crop.l}%)`;
+        el.dataset.data = JSON.stringify(d);
+
+        ensureObjectStyleTag(d.id).textContent = `#${d.id} .content-node { ${d.customCss || ''} }`;
+    }
+
+    function sortedLayers() { return Object.values(localState).sort((a,b) => b.zIndex - a.zIndex); }
+
+    function rebuildLayersPanel() {
+        const container = document.getElementById('layers-container');
+        container.innerHTML = '';
+        const layers = sortedLayers();
+        layers.forEach((obj, idx) => {
+            const item = document.createElement('div');
+            item.className = `layer-item ${activeElement?.id === obj.id ? 'active' : ''}`;
+            item.onclick = () => selectElement(document.getElementById(obj.id));
+
+            const name = document.createElement('span');
+            name.className = 'layer-name';
+            const label = obj.label || (obj.objType === 'text' ? `📝 ${(obj.content||'').substring(0,14)}` : `🖼️ ${obj.id}`);
+            name.textContent = label;
+            name.ondblclick = (e) => {
+                e.stopPropagation();
+                const newLabel = prompt('Название слоя:', obj.label || label);
+                if (newLabel !== null) { obj.label = newLabel; sendSocketMessage({type:'meme_update', ...obj}); }
+            };
+
+            const ctrl = document.createElement('div');
+            ctrl.className = 'layer-controls';
+
+            if (obj.hotkey) {
+                const badge = document.createElement('span'); badge.className = 'hotkey-badge'; badge.textContent = obj.hotkey;
+                ctrl.appendChild(badge);
+            }
+
+            const up = document.createElement('button'); up.className = 'layer-btn'; up.textContent = '▲'; up.title = 'На передний план';
+            up.onclick = (e) => { e.stopPropagation(); reorderLayer(obj, idx, -1, layers); };
+            const down = document.createElement('button'); down.className = 'layer-btn'; down.textContent = '▼'; down.title = 'На задний план';
+            down.onclick = (e) => { e.stopPropagation(); reorderLayer(obj, idx, 1, layers); };
+
+            const eye = document.createElement('button'); eye.className = 'layer-btn'; eye.textContent = obj.hidden ? '📁' : '👁️';
+            eye.onclick = (e) => { e.stopPropagation(); obj.hidden = !obj.hidden; sendSocketMessage({type:'meme_update', ...obj}); };
+
+            const lock = document.createElement('button'); lock.className = 'layer-btn'; lock.textContent = obj.locked ? '🔒' : '🔓';
+            lock.onclick = (e) => { e.stopPropagation(); obj.locked = !obj.locked; sendSocketMessage({type:'meme_update', ...obj}); };
+
+            ctrl.appendChild(up); ctrl.appendChild(down); ctrl.appendChild(eye); ctrl.appendChild(lock);
+            item.appendChild(name); item.appendChild(ctrl);
+            container.appendChild(item);
+        });
+        if (document.getElementById('hotkeys-panel').style.display === 'flex') rebuildHotkeyBindings();
+    }
+
+    function reorderLayer(obj, idx, dir, layers) {
+        const neighborIdx = idx + dir;
+        if (neighborIdx < 0 || neighborIdx >= layers.length) return;
+        const neighbor = layers[neighborIdx];
+        const tmp = obj.zIndex; obj.zIndex = neighbor.zIndex; neighbor.zIndex = tmp;
+        sendSocketMessage({type:'meme_update', ...obj});
+        sendSocketMessage({type:'meme_update', ...neighbor});
+    }
+
+    function toggleGlobalCssPanel() {
+        const p = document.getElementById('global-css-panel');
+        p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+    }
+    function applyGlobalCss() {
+        sendSocketMessage({ type: 'set_global_css', css: document.getElementById('global-css-input').value });
+    }
+
+    function renderPresence() {
+        const countEl = document.getElementById('presence-count');
+        const listEl = document.getElementById('presence-list');
+        const all = myIdentity ? [{ ...myIdentity, isYou: true }, ...remoteUsers] : remoteUsers;
+        countEl.textContent = all.length;
+        listEl.innerHTML = '';
+        all.forEach(u => {
+            const dot = document.createElement('span');
+            dot.className = 'presence-dot';
+            dot.style.background = u.color;
+            dot.title = u.isYou ? `${u.name} (вы)` : u.name;
+            listEl.appendChild(dot);
+        });
+    }
+
+    function renderRemoteSelections() {
+        document.querySelectorAll('.remote-tag').forEach(t => t.remove());
+        document.querySelectorAll('.meme-obj').forEach(el => el.style.outline = '');
+        Object.values(remoteSelections).forEach(sel => {
+            const el = document.getElementById(sel.objId);
+            if (!el) return;
+            el.style.outline = `2px dashed ${sel.color}`;
+            const tag = document.createElement('div');
+            tag.className = 'remote-tag';
+            tag.textContent = sel.name;
+            tag.style.background = sel.color;
+            el.appendChild(tag);
+        });
+    }
+
+    function toggleHotkeysPanel() {
+        const p = document.getElementById('hotkeys-panel');
+        p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+        if (p.style.display === 'flex') rebuildHotkeyBindings();
+    }
+    function rebuildHotkeyBindings() {
+        const box = document.getElementById('hotkeys-bindings');
+        box.innerHTML = '';
+        const withKeys = Object.values(localState).filter(o => o.hotkey);
+        if (withKeys.length === 0) {
+            box.innerHTML = '<div style="font-size:11px; color:#666;">Пока нет слоёв с назначенной клавишей — задай её в свойствах слоя справа.</div>';
+            return;
+        }
+        withKeys.forEach(obj => {
+            const row = document.createElement('div'); row.className = 'hotkey-row';
+            const name = document.createElement('span'); name.textContent = obj.label || obj.id;
+            const right = document.createElement('div'); right.style.display = 'flex'; right.style.gap = '6px'; right.style.alignItems = 'center';
+            const key = document.createElement('span'); key.className = 'key'; key.textContent = obj.hotkey;
+            const clear = document.createElement('button'); clear.className = 'layer-btn'; clear.textContent = '✕'; clear.style.width = 'auto';
+            clear.onclick = () => { obj.hotkey = ''; sendSocketMessage({ type: 'meme_update', ...obj }); rebuildHotkeyBindings(); rebuildLayersPanel(); };
+            right.appendChild(key); right.appendChild(clear);
+            row.appendChild(name); row.appendChild(right);
+            box.appendChild(row);
+        });
+    }
+
+    function refreshSceneGallery() {
+        fetch(basePath() + 'scenes').then(r => r.json()).then(data => {
+            const gallery = document.getElementById('scene-gallery');
+            gallery.innerHTML = '';
+            (data.scenes || []).forEach(name => {
+                const chip = document.createElement('div'); chip.className = 'scene-chip'; chip.textContent = name;
+                chip.onclick = () => { document.getElementById('scene-name-input').value = name; loadScene(); };
+                gallery.appendChild(chip);
+            });
+        }).catch(() => {});
+    }
+
+    function bindHotkey(input) {
+        input.value = "Нажмите кнопку...";
+        const capture = (e) => {
+            e.preventDefault();
+            input.value = e.key.toUpperCase();
+            window.removeEventListener('keydown', capture);
+            manualUpdate();
+        };
+        window.addEventListener('keydown', capture);
+    }
+
+    window.addEventListener('keydown', (e) => {
+        const typing = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
+
+        if (!typing) {
+            Object.values(localState).forEach(obj => {
+                if (obj.hotkey && obj.hotkey === e.key.toUpperCase()) {
+                    obj.hidden = !obj.hidden;
+                    sendSocketMessage({type: 'meme_update', ...obj});
+                }
+            });
+        }
+        if (typing) return;
+
+        if (e.key === 'Escape') { deselectActive(); return; }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && activeElement) { e.preventDefault(); deleteActive(); return; }
+        if (e.ctrlKey && e.key.toLowerCase() === 'd' && activeElement) { e.preventDefault(); duplicateActive(); return; }
+        if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveScene(); return; }
+        if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undoDelete(); return; }
+        if (e.ctrlKey && e.key.toLowerCase() === 'c' && activeElement) { e.preventDefault(); copyStyle(); return; }
+        if (e.ctrlKey && e.key.toLowerCase() === 'v' && activeElement) { e.preventDefault(); pasteStyle(); return; }
+
+        if (activeElement && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const d = localState[activeElement.id];
+            if (e.key === 'ArrowUp') d.y -= step;
+            if (e.key === 'ArrowDown') d.y += step;
+            if (e.key === 'ArrowLeft') d.x -= step;
+            if (e.key === 'ArrowRight') d.x += step;
+            updateElementVisuals(activeElement, d);
+            document.getElementById('inp-x').value = Math.round(d.x); document.getElementById('inp-y').value = Math.round(d.y);
+            sendSocketMessage({ type: 'meme_move', ...d });
+        }
+    });
+
+    function saveScene() {
+        sendSocketMessage({type: 'save_scene', scene_name: document.getElementById('scene-name-input').value});
+        setTimeout(refreshSceneGallery, 300);
+        alert("Сцена сохранена!");
+    }
+    function loadScene() { sendSocketMessage({type: 'load_scene', scene_name: document.getElementById('scene-name-input').value}); }
+
+    viewport.addEventListener('mousemove', (e) => {
+        if (e.buttons !== 1 && (isDragging || isResizing || isCropping)) { stopAllDragging(); return; }
+        const coords = getCanvasCoords(e);
+        if (isDragging && activeElement) {
+            activeElement.style.left = (coords.x - dragOffsetX) + 'px'; activeElement.style.top = (coords.y - dragOffsetY) + 'px';
+            const d = localState[activeElement.id]; d.x = parseFloat(activeElement.style.left); d.y = parseFloat(activeElement.style.top);
+            sendSocketMessage({ type: 'meme_move', id: activeElement.id, x: newX, y: newY });
+        }
+        if (isResizing && activeElement) {
+            const d = localState[activeElement.id]; 
+            const coords = getCanvasCoords(e);
+            
+            let newWidth = coords.x - d.x;
+
+            if (e.shiftKey) {
+                newWidth = Math.round(newWidth / 10) * 10;
+            }
+            d.size = Math.max(50, newWidth); 
+            
+            updateElementVisuals(activeElement, d);
+            sendSocketMessage({ type: 'meme_update', ...d });
+        }
+        if (isCropping && activeElement) {
+            const d = localState[activeElement.id];
+            d.crop = d.crop || {t:0,r:0,b:0,l:0};
+            const currentMouse = (cropEdge === 't' || cropEdge === 'b') ? e.clientY : e.clientX;
+            const deltaPercent = ((currentMouse - cropStartMouse) / cropAxisSize) * 100;
+            const sign = (cropEdge === 't' || cropEdge === 'l') ? 1 : -1;
+            const newVal = Math.max(0, Math.min(100, cropStartValue + sign * deltaPercent));
+            d.crop[cropEdge] = newVal;
+            updateElementVisuals(activeElement, d);
+            const slider = document.getElementById('crop-' + cropEdge);
+            if (slider) slider.value = Math.round(newVal);
+            sendSocketMessage({ type: 'meme_move', ...d });
+        }
+        if (isPanning) { panX += e.movementX; panY += e.movementY; updateTransform(); }
+
+        if (window.myClientId && coords) {
+            sendSocketMessage({
+                type: 'client_cursor',
+                clientId: window.myClientId,
+                x: coords.x,
+                y: coords.y
+            });
+        }
+    });
+
+    function startCropDrag(e, el) {
+        isCropping = true;
+        const rect = el.getBoundingClientRect();
+        const distTop = e.clientY - rect.top, distBottom = rect.bottom - e.clientY;
+        const distLeft = e.clientX - rect.left, distRight = rect.right - e.clientX;
+        const minDist = Math.min(distTop, distBottom, distLeft, distRight);
+        cropEdge = minDist === distTop ? 't' : minDist === distBottom ? 'b' : minDist === distLeft ? 'l' : 'r';
+        cropAxisSize = (cropEdge === 't' || cropEdge === 'b') ? rect.height : rect.width;
+        cropStartMouse = (cropEdge === 't' || cropEdge === 'b') ? e.clientY : e.clientX;
+        const d = localState[el.id];
+        d.crop = d.crop || {t:0,r:0,b:0,l:0};
+        cropStartValue = d.crop[cropEdge] || 0;
+    }
+
+    function stopAllDragging() {
+        if ((isDragging || isResizing || isCropping) && activeElement) sendSocketMessage({type:'meme_update', ...localState[activeElement.id]});
+        isDragging = isResizing = isPanning = isCropping = false; cropEdge = null;
+    }
+    window.addEventListener('mouseup', stopAllDragging);
+
+    function selectElement(el) {
+        if (!el) return;
+        if (activeElement) activeElement.classList.remove('active');
+        activeElement = el; el.classList.add('active');
+        document.getElementById('controls').style.display = 'block';
+        sendSocketMessage({ type: 'presence_select', id: el.id });
+        const d = localState[el.id];
+        document.getElementById('inp-x').value = Math.round(d.x); document.getElementById('inp-y').value = Math.round(d.y);
+        document.getElementById('size-slider').value = d.size;
+        document.getElementById('fx-animation').value = d.animation || 'none';
+        document.getElementById('fx-animation-out').value = d.animationOut || 'none';
+        document.getElementById('fx-delay').value = d.delay || 0;
+        document.getElementById('fx-duration').value = d.duration || 0;
+        document.getElementById('fx-hotkey').value = d.hotkey || '';
+        document.getElementById('fx-trigger').value = d.trigger_target || 'none';
+        document.getElementById('fx-trigger-duration').value = d.trigger_duration !== undefined ? d.trigger_duration : 5;
+        document.getElementById('crop-t').value = d.crop?.t || 0; document.getElementById('crop-r').value = d.crop?.r || 0;
+        document.getElementById('crop-b').value = d.crop?.b || 0; document.getElementById('crop-l').value = d.crop?.l || 0;
+        document.getElementById('fx-rotate').value = d.rotate || 0; document.getElementById('fx-opacity').value = d.opacity !== undefined ? d.opacity : 100;
+        document.getElementById('fx-radius').value = d.borderRadius || 0; document.getElementById('fx-blur').value = d.blur || 0;
+        document.getElementById('fx-shadow').value = d.shadow || 0;
+        document.getElementById('fx-customcss').value = d.customCss || '';
+
+        const textPanel = document.getElementById('text-only-controls');
+        if (d.objType === 'text') { textPanel.style.display = 'block'; document.getElementById('text-content-input').value = d.content || ""; }
+        else textPanel.style.display = 'none';
+        rebuildLayersPanel(); rebuildTimeline();
+    }
+
+    function manualUpdate() {
+        if(!activeElement) return;
+        const d = localState[activeElement.id];
+        d.x = parseFloat(document.getElementById('inp-x').value); d.y = parseFloat(document.getElementById('inp-y').value);
+        d.size = parseFloat(document.getElementById('size-slider').value);
+        d.animation = document.getElementById('fx-animation').value;
+        d.animationOut = document.getElementById('fx-animation-out').value;
+        d.delay = parseInt(document.getElementById('fx-delay').value) || 0;
+        d.duration = parseInt(document.getElementById('fx-duration').value) || 0;
+        d.hotkey = document.getElementById('fx-hotkey').value;
+        d.trigger_target = document.getElementById('fx-trigger').value;
+        d.trigger_duration = parseInt(document.getElementById('fx-trigger-duration').value) || 0;
+        d.crop = { t: parseInt(document.getElementById('crop-t').value), r: parseInt(document.getElementById('crop-r').value), b: parseInt(document.getElementById('crop-b').value), l: parseInt(document.getElementById('crop-l').value) };
+        d.rotate = parseInt(document.getElementById('fx-rotate').value); d.opacity = parseInt(document.getElementById('fx-opacity').value);
+        d.borderRadius = parseInt(document.getElementById('fx-radius').value); d.blur = parseInt(document.getElementById('fx-blur').value); d.shadow = parseInt(document.getElementById('fx-shadow').value);
+        d.customCss = document.getElementById('fx-customcss').value;
+        updateElementVisuals(activeElement, d); sendSocketMessage({ type: 'meme_update', ...d });
+    }
+
+    document.getElementById('text-content-input').oninput = (e) => { if (activeElement) { const d = localState[activeElement.id]; d.content = e.target.value; updateElementVisuals(activeElement, d); sendSocketMessage({type:'meme_update', ...d}); } };
+    function updateTransform() { canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
+    viewport.onwheel = (e) => { e.preventDefault(); const rect = viewport.getBoundingClientRect(); const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top; const canvasX = (mouseX - panX) / scale, canvasY = (mouseY - panY) / scale; scale = Math.min(Math.max(0.1, scale * (e.deltaY > 0 ? 1/1.1 : 1.1)), 10); panX = mouseX - canvasX * scale; panY = mouseY - canvasY * scale; updateTransform(); };
+    viewport.onmousedown = (e) => { if (e.button === 1 || (e.button === 0 && e.target === viewport)) { isPanning = true; deselectActive(); } };
+
+    function deselectActive() {
+        if (!activeElement) return;
+        activeElement.classList.remove('active');
+        activeElement = null;
+        document.getElementById('controls').style.display = 'none';
+        sendSocketMessage({ type: 'presence_select', id: null });
+        rebuildLayersPanel();
+    }
+
+    function addObject(type) {
+        const val = prompt(type === 'text' ? "Текст:" : "URL:"); if(!val) return;
+        const id = 'obj_' + Date.now();
+        const data = { id, objType: type, x: 500, y: 500, size: 300, zIndex: Date.now(), crop: {t:0,r:0,b:0,l:0}, animation: 'none', animationOut: 'none', delay: 0, duration: 0 };
+        if(type === 'text') data.content = val; else data.src = val;
+        sendSocketMessage({type: 'meme_update', ...data});
+    }
+
+    document.getElementById('url-input').onkeydown = (e) => { if(e.key === 'Enter') { const id = 'm'+Date.now(); sendSocketMessage({id, objType: 'image', src: e.target.value, x: 500, y: 500, size: 300, crop:{t:0,r:0,b:0,l:0}, type:'meme_update'}); e.target.value=''; } };
+
+    function handleFile(input) {
+        const file = input.files[0]; if (!file) return;
+        const formData = new FormData(); formData.append("file", file);
+        const uploadUrl = window.location.pathname.replace(/\/admin\/?$/, '/upload');
+        fetch(uploadUrl, { method: 'POST', body: formData }).then(res => res.json()).then(data => {
+            const bp = basePath();
+            const id = 'f' + Date.now();
+            sendSocketMessage({ type: 'meme_update', id, objType: 'image', src: window.location.origin + bp + data.url, x: 500, y: 500, size: 300, crop:{t:0,r:0,b:0,l:0} });
+            input.value = '';
+        });
+    }
+    function deleteActive() {
+        if (activeElement) {
+            lastDeleted = JSON.parse(JSON.stringify(localState[activeElement.id]));
+            sendSocketMessage({type: 'delete', id: activeElement.id});
+        }
+    }
+    function clearAll() { if(confirm("Очистить холст?")) sendSocketMessage({type: 'clear_all'}); }
+
+    function duplicateActive() {
+        if (!activeElement) return;
+        const src = localState[activeElement.id];
+        const clone = JSON.parse(JSON.stringify(src));
+        clone.id = 'obj_' + Date.now();
+        clone.x = (src.x || 0) + 40; clone.y = (src.y || 0) + 40;
+        clone.zIndex = Date.now();
+        clone.hotkey = ''; 
+        sendSocketMessage({ type: 'meme_update', ...clone });
+    }
+
+    function centerActive() {
+        if (!activeElement) return;
+        const d = localState[activeElement.id];
+        d.x = canvasBounds.width / 2; d.y = canvasBounds.height / 2;
+        updateElementVisuals(activeElement, d);
+        document.getElementById('inp-x').value = Math.round(d.x); document.getElementById('inp-y').value = Math.round(d.y);
+        sendSocketMessage({ type: 'meme_move', ...d });
+    }
+
+    function copyStyle() {
+        if (!activeElement) return;
+        const d = localState[activeElement.id];
+        styleClipboard = {
+            rotate: d.rotate, opacity: d.opacity, borderRadius: d.borderRadius, blur: d.blur, shadow: d.shadow,
+            animation: d.animation, animationOut: d.animationOut, customCss: d.customCss,
+            crop: d.crop ? { ...d.crop } : undefined,
+        };
+    }
+
+    function pasteStyle() {
+        if (!activeElement || !styleClipboard) return;
+        const d = localState[activeElement.id];
+        Object.assign(d, JSON.parse(JSON.stringify(styleClipboard)));
+        updateElementVisuals(activeElement, d);
+        selectElement(activeElement);
+        sendSocketMessage({ type: 'meme_update', ...d });
+    }
+
+    function undoDelete() {
+        if (!lastDeleted) return;
+        sendSocketMessage({ type: 'meme_update', ...lastDeleted });
+        lastDeleted = null;
+    }
+
+    let timelineTimeouts = [];
+
+    function toggleTimelinePanel() {
+        const panel = document.getElementById('timeline-panel');
+        const btn = document.getElementById('tl-collapse-btn');
+        panel.classList.toggle('collapsed');
+        btn.textContent = panel.classList.contains('collapsed') ? '▸ Развернуть' : '▾ Свернуть';
+    }
+
+    function timelineLayers() {
+        return sortedLayers().filter(o => (o.delay || 0) > 0 || (o.duration || 0) > 0 || activeElement?.id === o.id);
+    }
+
+    function rebuildTimeline() {
+        const totalSec = parseFloat(document.getElementById('tl-length').value) || 15;
+        const totalMs = totalSec * 1000;
+
+        const ruler = document.getElementById('tl-ruler');
+        ruler.innerHTML = '';
+        for (let s = 0; s <= totalSec; s += Math.max(1, Math.round(totalSec / 10))) {
+            const tick = document.createElement('span');
+            tick.style.left = ((s * 1000 / totalMs) * 100) + '%';
+            tick.textContent = s + 's';
+            ruler.appendChild(tick);
+        }
+
+        const rows = document.getElementById('tl-rows');
+        rows.innerHTML = '';
+        const layers = timelineLayers();
+        if (layers.length === 0) {
+            rows.innerHTML = '<div style="font-size:11px; color:#666; padding:10px 0;">Задайте "Задержку" или "Длительность" слою справа, чтобы увидеть его здесь.</div>';
+            return;
+        }
+
+        layers.forEach(obj => {
+            const row = document.createElement('div'); row.className = 'tl-row';
+            const label = document.createElement('div'); label.className = 'tl-label';
+            label.textContent = obj.label || obj.id;
+            const track = document.createElement('div'); track.className = 'tl-track';
+
+            const delay = obj.delay || 0;
+            const duration = obj.duration || 0;
+            const bar = document.createElement('div'); bar.className = 'tl-bar' + (duration === 0 ? ' infinite' : '');
+            if (activeElement?.id === obj.id) bar.classList.add('selected');
+            bar.style.left = Math.min(99, (delay / totalMs) * 100) + '%';
+            bar.style.width = duration === 0
+                ? `calc(${100 - Math.min(99,(delay/totalMs)*100)}% - 2px)`
+                : Math.max(0.6, (duration / totalMs) * 100) + '%';
+
+            const resize = document.createElement('div'); resize.className = 'tl-resize';
+            if (duration > 0) bar.appendChild(resize);
+
+            bar.onmousedown = (e) => {
+                if (e.target === resize) return;
+                e.stopPropagation();
+                selectElement(document.getElementById(obj.id));
+                const trackWidth = track.getBoundingClientRect().width;
+                const msPerPx = totalMs / trackWidth;
+                const startX = e.clientX; const startDelay = delay;
+                const onMove = (ev) => {
+                    const newDelay = Math.max(0, Math.round(startDelay + (ev.clientX - startX) * msPerPx));
+                    obj.delay = newDelay;
+                    if (document.getElementById('fx-delay')) document.getElementById('fx-delay').value = newDelay;
+                    sendSocketMessage({type:'meme_update', ...obj});
+                    rebuildTimeline();
+                };
+                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+            };
+
+            resize.onmousedown = (e) => {
+                e.stopPropagation(); e.preventDefault();
+                selectElement(document.getElementById(obj.id));
+                const trackWidth = track.getBoundingClientRect().width;
+                const msPerPx = totalMs / trackWidth;
+                const startX = e.clientX; const startDuration = duration || 1000;
+                const onMove = (ev) => {
+                    const newDuration = Math.max(200, Math.round(startDuration + (ev.clientX - startX) * msPerPx));
+                    obj.duration = newDuration;
+                    if (document.getElementById('fx-duration')) document.getElementById('fx-duration').value = newDuration;
+                    sendSocketMessage({type:'meme_update', ...obj});
+                    rebuildTimeline();
+                };
+                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+            };
+
+            track.appendChild(bar); row.appendChild(label); row.appendChild(track); rows.appendChild(row);
+        });
+    }
+
+    function playTimeline() {
+        stopTimeline();
+        const layers = timelineLayers();
+        layers.forEach(obj => {
+            obj.hidden = true; sendSocketMessage({type:'meme_update', ...obj});
+
+            const showAt = setTimeout(() => {
+                obj.hidden = false; sendSocketMessage({type:'meme_update', ...obj});
+            }, obj.delay || 0);
+            timelineTimeouts.push(showAt);
+
+            if (obj.duration) {
+                const hideAt = setTimeout(() => {
+                    obj.hidden = true; sendSocketMessage({type:'meme_update', ...obj});
+                }, (obj.delay || 0) + obj.duration);
+                timelineTimeouts.push(hideAt);
+            }
+        });
+    }
+
+    function stopTimeline() {
+        timelineTimeouts.forEach(id => clearTimeout(id));
+        timelineTimeouts = [];
+    }
+
+    refreshSceneGallery();
+    rebuildTimeline();
+</script>
+</body>
+</html>

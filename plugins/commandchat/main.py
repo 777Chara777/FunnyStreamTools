@@ -31,10 +31,10 @@ class CommandChatPlugin(BasePlugin):
         self.emote_map = {}
         self.twitch_username = os.environ.get("twitch_account", "kek")
 
-        if self.twitch_username:
-            self.load_7tv_emotes(self.twitch_username)
-            self.load_betterttv_emotes(self.twitch_username) 
-            self.load_ffz_emotes(self.twitch_username)
+        if self.twitch_username: pass
+            # self.load_7tv_emotes(self.twitch_username)
+            # self.load_betterttv_emotes(self.twitch_username) 
+            # self.load_ffz_emotes(self.twitch_username)
         
         print(f"Loaded {len(self.emote_map)} total emotes")
 
