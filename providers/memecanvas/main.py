@@ -17,7 +17,7 @@ class MemeCanvasProvider(BaseProvider):
 
     async def start(self):
         asyncio.create_task(self.start_udp_server())
-        print(f"[+] [PROVIDER] MemeCanvasProvider ('{self.provider_id}') запущен с поддержкой Сцен и Триггеров.")
+        print(f"[+] [PROVIDER] MemeCanvasProvider ('{self.provider_id}') launched with support for Scenes and Triggers.")
         
         while self.running:
             await asyncio.sleep(1)

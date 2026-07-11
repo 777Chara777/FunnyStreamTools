@@ -83,7 +83,7 @@ class MemeCanvasPlugin(BasePlugin):
 
             identity = {
                 "id": uuid.uuid4().hex[:8],
-                "name": f"Гость-{random.randint(1000, 9999)}",
+                "name": f"Guest-{random.randint(1000, 9999)}",
                 "color": random.choice(PRESENCE_COLORS),
             }
             self.connected_websockets[websocket] = identity

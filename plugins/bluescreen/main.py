@@ -24,13 +24,13 @@ class BlueScreenMeme(BasePlugin):
         return {"bluescreen": payload["data"]["text"].strip().lower() == "bluescreen"}
 
     def setup_routes(self):
-        plugin_dir = os.path.dirname(__file__)
-        html_path = os.path.join(plugin_dir, "index.html")
+        # plugin_dir = os.path.dirname(__file__)
+        # html_path = os.path.join(plugin_dir, "index.html")
 
-        @self.router.get("", response_class=HTMLResponse)
-        async def get_widget():
-            with open(html_path, "r", encoding="utf-8") as f:
-                return f.read()
+        # @self.router.get("", response_class=HTMLResponse)
+        # async def get_widget():
+        #     with open(html_path, "r", encoding="utf-8") as f:
+        #         return f.read()
 
         @self.router.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):

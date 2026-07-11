@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Control Panel</title>
+    <style>
+        body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; }
+        h1, h2 { color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .card { background: #1e1e1e; border: 1px solid #333; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+        .row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+        select, button { background: #333; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; font-family: monospace; cursor: pointer; }
+        button:hover { background: #00ff00; color: #000; }
+        .status { color: #888; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+    <h1>🎛 FunnyStreamTools Dashboard</h1>
+    <div id="status-msg" class="status">Loading configuration...</div>
+
+    <h2>🧩 Widgets and Skins</h2>
+    <div id="plugins-container"></div>
+
+    <h2>🔌 Data Providers</h2>
+    <div id="providers-container"></div>
+
+    <button onclick="saveConfig()" style="margin-top: 20px; padding: 10px 20px; font-size: 1.1em;">💾 Save settings</button>
+    <button onclick="reloadModules()" style="margin-top: 20px; padding: 10px 20px; font-size: 1.1em; background: #ff9900; color: #000; border: 1px solid #ff9900;">🔄 Find new plugins on disk</button>
+
+    <script>
+        let currentConfig = {};
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/widget/dashboard/api/config');
+                const data = await res.json();
+                currentConfig = data.config;
+                
+                renderPlugins(data.config.plugins, data.available_themes);
+                renderProviders(data.config.providers);
+                document.getElementById('status-msg').innerText = "onfiguration loaded successfully.";
+            } catch (e) {
+                document.getElementById('status-msg').innerText = "Data loading error.";
+            }
+        }
+        async function reloadModules() {
+            document.getElementById('status-msg').innerText = "Scanning directory...";
+            const res = await fetch('/widget/dashboard/api/reload', { method: 'POST' });
+            const result = await res.json();
+            document.getElementById('status-msg').innerText = result.message;
+            setTimeout(loadDashboard, 1000);
+        }
+
+
+        function renderPlugins(plugins, themes) {
+            const container = document.getElementById('plugins-container');
+            container.innerHTML = '';
+            
+            for (let name in plugins) {
+                const p = plugins[name];
+                const available = themes[name] || ['index.html'];
+                
+                let options = available.map(t => 
+                    `<option value="${t}" ${p.current_theme === t ? 'selected' : ''}>${t}</option>`
+                ).join('');
+
+                container.innerHTML += `
+                    <div class="card">
+                        <div class="row">
+                            <strong>${name.toUpperCase()}</strong>
+                            <label>
+                                <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="currentConfig.plugins['${name}'].enabled = this.checked"> Diable
+                            </label>
+                        </div>
+                        <div class="row">
+                            <span>Select HTML style:</span>
+                            <select onchange="currentConfig.plugins['${name}'].current_theme = this.value">${options}</select>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderProviders(providers) {
+            const container = document.getElementById('providers-container');
+            container.innerHTML = '';
+            
+            for (let name in providers) {
+                const prov = providers[name];
+                container.innerHTML += `
+                    <div class="card">
+                        <div class="row">
+                            <strong>${name.toUpperCase()}</strong>
+                            <label>
+                                <input type="checkbox" ${prov.enabled ? 'checked' : ''} onchange="currentConfig.providers['${name}'].enabled = this.checked"> Active
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function saveConfig() {
+            document.getElementById('status-msg').innerText = "Saving...";
+            const res = await fetch('/widget/dashboard/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentConfig)
+            });
+            const result = await res.json();
+            document.getElementById('status-msg').innerText = result.message;
+            
+            setTimeout(loadDashboard, 500);
+        }
+
+        window.onload = loadDashboard;
+    </script>
+</body>
+</html>

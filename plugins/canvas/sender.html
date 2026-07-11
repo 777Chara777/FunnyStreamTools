@@ -83,57 +83,57 @@
 <body>
 
 <div class="layers-panel">
-    <div class="section-title">Сохраненные Сцены</div>
+    <div class="section-title">Saved Scenes</div>
     <div style="display: flex; gap: 5px;">
-        <input type="text" id="scene-name-input" placeholder="Имя сцены" value="main_overlay">
+        <input type="text" id="scene-name-input" placeholder="Scene name" value="main_overlay">
         <button onclick="saveScene()" style="width: auto; background: #4caf50;">💾</button>
         <button onclick="loadScene()" style="width: auto; background: #ff9800;">📂</button>
     </div>
     <div class="chip-row" id="scene-gallery"></div>
 
     <div class="section-title" style="margin-top: 10px;">
-        <span>Глобальный CSS сцены</span>
+        <span>Scene Global CSS</span>
         <button onclick="toggleGlobalCssPanel()" style="width:auto; background:transparent; color:#8a8e94; padding:0;">▾</button>
     </div>
     <div id="global-css-panel" style="display:none; flex-direction:column; gap:6px;">
         <textarea id="global-css-input" rows="4" placeholder="#obj_123 { filter: sepia(1); } ..."></textarea>
-        <button onclick="applyGlobalCss()" style="background:#4caf50;">Применить ко всей сцене</button>
+        <button onclick="applyGlobalCss()" style="background:#4caf50;">Apply to entire scene</button>
     </div>
 
     <div class="section-title" style="margin-top: 10px;">
-        <span>⌨ Хоткеи</span>
+        <span>⌨ Hotkeys</span>
         <button onclick="toggleHotkeysPanel()" style="width:auto; background:transparent; color:#8a8e94; padding:0;">▾</button>
     </div>
     <div id="hotkeys-panel" style="display:none; flex-direction:column; gap:6px;">
         <div class="hotkey-static">
-            <div><b>Del</b> — удалить слой</div>
-            <div><b>Ctrl+D</b> — дублировать слой</div>
-            <div><b>Ctrl+C / Ctrl+V</b> — копировать/вставить стиль</div>
-            <div><b>Ctrl+Z</b> — вернуть удалённый слой</div>
-            <div><b>Ctrl+S</b> — сохранить сцену</div>
-            <div><b>Стрелки</b> — сдвиг на 1px (Shift = 10px)</div>
-            <div><b>Esc</b> — снять выделение</div>
-            <div><b>Shift + Перетаскивание</b> — обрезка (crop)</div>
+            <div><b>Del</b> — delete layer</div>
+            <div><b>Ctrl+D</b> — duplicate layer</div>
+            <div><b>Ctrl+C / Ctrl+V</b> — copy/paste style</div>
+            <div><b>Ctrl+Z</b> — restore deleted layer</div>
+            <div><b>Ctrl+S</b> — save scene</div>
+            <div><b>Arrows</b> — shift by 1px (Shift = 10px)</div>
+            <div><b>Esc</b> — deselect</div>
+            <div><b>Shift + Drag</b> — crop</div>
         </div>
-        <div class="section-title" style="margin-top:4px;">Привязки к слоям</div>
+        <div class="section-title" style="margin-top:4px;">Layer Bindings</div>
         <div id="hotkeys-bindings" style="display:flex; flex-direction:column; gap:4px;"></div>
     </div>
 
-    <div class="section-title" style="margin-top: 15px;">Слои (Layers)</div>
+    <div class="section-title" style="margin-top: 15px;">Layers</div>
     <div id="layers-container" style="display: flex; flex-direction: column; gap: 5px;">
     </div>
 </div>
 
 <div class="main-workspace">
     <div class="toolbar">
-        <div style="width: 200px;"><input type="text" id="url-input" placeholder="Добавить URL картинки + Enter"></div>
-        <button onclick="addObject('text')" style="width:auto; background:#4caf50;">+ Текст</button>
+        <div style="width: 200px;"><input type="text" id="url-input" placeholder="Add image URL + Enter"></div>
+        <button onclick="addObject('text')" style="width:auto; background:#4caf50;">+ Text</button>
         <button onclick="addObject('iframe')" style="width:auto; background:#ff9800;">+ Web Source</button>
-        <button onclick="document.getElementById('file-input').click()" style="width:auto; background:#29292e;">📁 Загрузить файл</button>
+        <button onclick="document.getElementById('file-input').click()" style="width:auto; background:#29292e;">📁 Upload file</button>
         <input type="file" id="file-input" style="display:none;" onchange="handleFile(this)">
-        <button onclick="clearAll()" style="width:auto; background:#ed4245; margin-left:auto;">Очистить всё</button>
-        <div id="presence-widget" title="Кто сейчас онлайн">
-            <span id="presence-count">1</span> онлайн
+        <button onclick="clearAll()" style="width:auto; background:#ed4245; margin-left:auto;">Clear all</button>
+        <div id="presence-widget" title="Who is online now">
+            <span id="presence-count">1</span> online
             <span id="presence-list" style="display:flex;"></span>
         </div>
     </div>
@@ -146,13 +146,13 @@
 
     <div id="timeline-panel" style="height: 220px;">
         <div class="timeline-header">
-            <div class="section-title" style="flex-shrink:0;">⏱ Таймлайн</div>
-            <button onclick="playTimeline()" style="background:#4caf50;">▶ Играть</button>
-            <button onclick="stopTimeline()" style="background:#ed4245;">⏹ Стоп</button>
+            <div class="section-title" style="flex-shrink:0;">⏱ Timeline</div>
+            <button onclick="playTimeline()" style="background:#4caf50;">▶ Play</button>
+            <button onclick="stopTimeline()" style="background:#ed4245;">⏹ Stop</button>
             <label style="font-size:11px; color:#8a8e94; display:flex; align-items:center; gap:4px; width:auto;">
-                Длина (сек): <input type="number" id="tl-length" value="15" min="2" max="120" style="width:60px;" onchange="rebuildTimeline()">
+                Length (sec): <input type="number" id="tl-length" value="15" min="2" max="120" style="width:60px;" onchange="rebuildTimeline()">
             </label>
-            <button onclick="toggleTimelinePanel()" style="width:auto; background:transparent; color:#8a8e94; margin-left:auto;" id="tl-collapse-btn">▾ Свернуть</button>
+            <button onclick="toggleTimelinePanel()" style="width:auto; background:transparent; color:#8a8e94; margin-left:auto;" id="tl-collapse-btn">▾ Collapse</button>
         </div>
         <div id="timeline-body">
             <div class="tl-ruler" id="tl-ruler"></div>
@@ -163,26 +163,26 @@
 
 <div class="sidebar">
     <div id="controls" style="display: none;">
-        <div class="section-title">Геометрия</div>
+        <div class="section-title">Geometry</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
             <input type="number" id="inp-x" onchange="manualUpdate()">
             <input type="number" id="inp-y" onchange="manualUpdate()">
         </div>
-        <div class="control-row"><label>Размер:</label><input type="range" id="size-slider" min="50" max="1500" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Size:</label><input type="range" id="size-slider" min="50" max="1500" oninput="manualUpdate()"></div>
 
-        <div class="section-title">Анимация Входа / Выхода</div>
-        <div class="control-row"><label>Появление:</label>
+        <div class="section-title">In / Out Animation</div>
+        <div class="control-row"><label>Entrance:</label>
             <select id="fx-animation" onchange="manualUpdate()">
-                <option value="none">Без анимации</option>
+                <option value="none">No animation</option>
                 <option value="animate__fadeIn">Fade In</option>
                 <option value="animate__bounceIn">Bounce In</option>
                 <option value="animate__slideInLeft">Slide Left</option>
                 <option value="animate__zoomIn">Zoom In</option>
             </select>
         </div>
-        <div class="control-row"><label>Исчезновение:</label>
+        <div class="control-row"><label>Exit:</label>
             <select id="fx-animation-out" onchange="manualUpdate()">
-                <option value="none">Без анимации</option>
+                <option value="none">No animation</option>
                 <option value="animate__fadeOut">Fade Out</option>
                 <option value="animate__bounceOut">Bounce Out</option>
                 <option value="animate__slideOutRight">Slide Right</option>
@@ -190,24 +190,24 @@
             </select>
         </div>
 
-        <div class="section-title">Таймлайн слоя</div>
-        <div class="control-row"><label>Задержка (мс):</label><input type="number" id="fx-delay" min="0" step="100" onchange="manualUpdate(); rebuildTimeline();"></div>
-        <div class="control-row"><label>Длительность (мс):</label><input type="number" id="fx-duration" min="0" step="100" placeholder="0 = не скрывать" onchange="manualUpdate(); rebuildTimeline();"></div>
+        <div class="section-title">Layer Timeline</div>
+        <div class="control-row"><label>Delay (ms):</label><input type="number" id="fx-delay" min="0" step="100" onchange="manualUpdate(); rebuildTimeline();"></div>
+        <div class="control-row"><label>Duration (ms):</label><input type="number" id="fx-duration" min="0" step="100" placeholder="0 = do not hide" onchange="manualUpdate(); rebuildTimeline();"></div>
 
-        <div class="section-title">Хоткей & Автоматизация</div>
+        <div class="section-title">Hotkey & Automation</div>
         <div class="control-row">
-            <label>Клавиша:</label>
-            <input type="text" id="fx-hotkey" placeholder="Нажмите клавишу..." readonly onclick="bindHotkey(this)">
+            <label>Key:</label>
+            <input type="text" id="fx-hotkey" placeholder="Press key..." readonly onclick="bindHotkey(this)">
         </div>
         <div class="control-row">
-            <label>Триггер события:</label>
+            <label>Event trigger:</label>
             <select id="fx-trigger" onchange="manualUpdate()">
-                <option value="none">Нет</option>
-                <option value="donation:alert">Донат (Тест)</option>
-                <option value="twitch:chat_command">Команда чата</option>
+                <option value="none">None</option>
+                <option value="donation:alert">Donation (Test)</option>
+                <option value="twitch:chat_command">Chat command</option>
             </select>
         </div>
-        <div class="control-row"><label>Показ триггера (сек):</label><input type="number" id="fx-trigger-duration" min="0" step="1" placeholder="5" onchange="manualUpdate()"></div>
+        <div class="control-row"><label>Trigger display (sec):</label><input type="number" id="fx-trigger-duration" min="0" step="1" placeholder="5" onchange="manualUpdate()"></div>
 
         <div class="section-title">OBS Crop</div>
         <div class="control-row"><label>Top:</label><input type="range" id="crop-t" min="0" max="100" oninput="manualUpdate()"></div>
@@ -215,30 +215,30 @@
         <div class="control-row"><label>Bottom:</label><input type="range" id="crop-b" min="0" max="100" oninput="manualUpdate()"></div>
         <div class="control-row"><label>Left:</label><input type="range" id="crop-l" min="0" max="100" oninput="manualUpdate()"></div>
 
-        <div class="section-title">Figma CSS Стили</div>
-        <div class="control-row"><label>Поворот°:</label><input type="range" id="fx-rotate" min="-180" max="180" oninput="manualUpdate()"></div>
+        <div class="section-title">Figma CSS Styles</div>
+        <div class="control-row"><label>Rotation°:</label><input type="range" id="fx-rotate" min="-180" max="180" oninput="manualUpdate()"></div>
         <div class="control-row"><label>Opacity:</label><input type="range" id="fx-opacity" min="0" max="100" oninput="manualUpdate()"></div>
-        <div class="control-row"><label>Скругление:</label><input type="range" id="fx-radius" min="0" max="200" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Border radius:</label><input type="range" id="fx-radius" min="0" max="200" oninput="manualUpdate()"></div>
         <div class="control-row"><label>Blur:</label><input type="range" id="fx-blur" min="0" max="30" oninput="manualUpdate()"></div>
-        <div class="control-row"><label>Тень:</label><input type="range" id="fx-shadow" min="0" max="50" oninput="manualUpdate()"></div>
+        <div class="control-row"><label>Shadow:</label><input type="range" id="fx-shadow" min="0" max="50" oninput="manualUpdate()"></div>
 
-        <div class="section-title">Кастомный CSS слоя</div>
+        <div class="section-title">Layer Custom CSS</div>
         <textarea id="fx-customcss" rows="3" placeholder="filter: grayscale(1); border: 2px solid red;" oninput="manualUpdate()"></textarea>
 
         <div id="text-only-controls" style="display:none;">
-            <div class="section-title">Контент Текста</div>
+            <div class="section-title">Text Content</div>
             <textarea id="text-content-input"></textarea>
         </div>
 
-        <div class="section-title">Удобные функции</div>
+        <div class="section-title">Handy Features</div>
         <div class="btn-group">
-            <button onclick="duplicateActive()" style="background:#29292e;">⎘ Дублировать</button>
-            <button onclick="centerActive()" style="background:#29292e;">🎯 По центру</button>
-            <button onclick="copyStyle()" style="background:#29292e;">📋 Копировать стиль</button>
-            <button onclick="pasteStyle()" style="background:#29292e;">📥 Вставить стиль</button>
+            <button onclick="duplicateActive()" style="background:#29292e;">⎘ Duplicate</button>
+            <button onclick="centerActive()" style="background:#29292e;">🎯 Center alignment</button>
+            <button onclick="copyStyle()" style="background:#29292e;">📋 Copy style</button>
+            <button onclick="pasteStyle()" style="background:#29292e;">📥 Paste style</button>
         </div>
 
-        <button onclick="deleteActive()" style="background:#ed4245; margin-top:15px;">Удалить слой</button>
+        <button onclick="deleteActive()" style="background:#ed4245; margin-top:15px;">Delete layer</button>
     </div>
 </div>
 
@@ -447,7 +447,7 @@
             name.textContent = label;
             name.ondblclick = (e) => {
                 e.stopPropagation();
-                const newLabel = prompt('Название слоя:', obj.label || label);
+                const newLabel = prompt('Layer name:', obj.label || label);
                 if (newLabel !== null) { obj.label = newLabel; sendSocketMessage({type:'meme_update', ...obj}); }
             };
 
@@ -459,9 +459,9 @@
                 ctrl.appendChild(badge);
             }
 
-            const up = document.createElement('button'); up.className = 'layer-btn'; up.textContent = '▲'; up.title = 'На передний план';
+            const up = document.createElement('button'); up.className = 'layer-btn'; up.textContent = '▲'; up.title = 'Bring to front';
             up.onclick = (e) => { e.stopPropagation(); reorderLayer(obj, idx, -1, layers); };
-            const down = document.createElement('button'); down.className = 'layer-btn'; down.textContent = '▼'; down.title = 'На задний план';
+            const down = document.createElement('button'); down.className = 'layer-btn'; down.textContent = '▼'; down.title = 'Send to back';
             down.onclick = (e) => { e.stopPropagation(); reorderLayer(obj, idx, 1, layers); };
 
             const eye = document.createElement('button'); eye.className = 'layer-btn'; eye.textContent = obj.hidden ? '📁' : '👁️';
@@ -504,7 +504,7 @@
             const dot = document.createElement('span');
             dot.className = 'presence-dot';
             dot.style.background = u.color;
-            dot.title = u.isYou ? `${u.name} (вы)` : u.name;
+            dot.title = u.isYou ? `${u.name} (you)` : u.name;
             listEl.appendChild(dot);
         });
     }
@@ -534,7 +534,7 @@
         box.innerHTML = '';
         const withKeys = Object.values(localState).filter(o => o.hotkey);
         if (withKeys.length === 0) {
-            box.innerHTML = '<div style="font-size:11px; color:#666;">Пока нет слоёв с назначенной клавишей — задай её в свойствах слоя справа.</div>';
+            box.innerHTML = '<div style="font-size:11px; color:#666;">No layers with an assigned key yet — set it in the layer properties on the right.</div>';
             return;
         }
         withKeys.forEach(obj => {
@@ -563,7 +563,7 @@
     }
 
     function bindHotkey(input) {
-        input.value = "Нажмите кнопку...";
+        input.value = "Press key...";
         const capture = (e) => {
             e.preventDefault();
             input.value = e.key.toUpperCase();
@@ -611,7 +611,7 @@
     function saveScene() {
         sendSocketMessage({type: 'save_scene', scene_name: document.getElementById('scene-name-input').value});
         setTimeout(refreshSceneGallery, 300);
-        alert("Сцена сохранена!");
+        alert("Scene saved!");
     }
     function loadScene() { sendSocketMessage({type: 'load_scene', scene_name: document.getElementById('scene-name-input').value}); }
 
@@ -745,7 +745,7 @@
     }
 
     function addObject(type) {
-        const val = prompt(type === 'text' ? "Текст:" : "URL:"); if(!val) return;
+        const val = prompt(type === 'text' ? "Text:" : "URL:"); if(!val) return;
         const id = 'obj_' + Date.now();
         const data = { id, objType: type, x: 500, y: 500, size: 300, zIndex: Date.now(), crop: {t:0,r:0,b:0,l:0}, animation: 'none', animationOut: 'none', delay: 0, duration: 0 };
         if(type === 'text') data.content = val; else data.src = val;
@@ -771,7 +771,7 @@
             sendSocketMessage({type: 'delete', id: activeElement.id});
         }
     }
-    function clearAll() { if(confirm("Очистить холст?")) sendSocketMessage({type: 'clear_all'}); }
+    function clearAll() { if(confirm("Clear canvas?")) sendSocketMessage({type: 'clear_all'}); }
 
     function duplicateActive() {
         if (!activeElement) return;
@@ -824,7 +824,7 @@
         const panel = document.getElementById('timeline-panel');
         const btn = document.getElementById('tl-collapse-btn');
         panel.classList.toggle('collapsed');
-        btn.textContent = panel.classList.contains('collapsed') ? '▸ Развернуть' : '▾ Свернуть';
+        btn.textContent = panel.classList.contains('collapsed') ? '▸ Expand' : '▾ Collapse';
     }
 
     function timelineLayers() {
@@ -848,7 +848,7 @@
         rows.innerHTML = '';
         const layers = timelineLayers();
         if (layers.length === 0) {
-            rows.innerHTML = '<div style="font-size:11px; color:#666; padding:10px 0;">Задайте "Задержку" или "Длительность" слою справа, чтобы увидеть его здесь.</div>';
+            rows.innerHTML = '<div style="font-size:11px; color:#666; padding:10px 0;">Set "Delay" or "Duration" for a layer on the right to see it here.</div>';
             return;
         }
 
