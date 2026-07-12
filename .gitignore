@@ -15,4 +15,5 @@ test.py
 config.json
 
 uploads/
+.app_sdk/
 *.spec

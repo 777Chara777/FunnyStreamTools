@@ -13,7 +13,7 @@ from app.baseprovider import BaseProvider
 from app.baseplugin import BasePlugin
 
 IS_DEBUG = not getattr(sys, 'frozen', False)
-BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if getattr(sys, 'frozen', False):
     local_venv = os.path.join(BASE_DIR, ".venv", "Lib", "site-packages")
@@ -109,7 +109,7 @@ class FunnyStreamTools:
         config_group = self.config[layer_name]
         config_changed = False
 
-        for entry in os.scandir(directory):
+        for entry in os.scandir(full_directory_path):
             if entry.is_dir():
                 name = entry.name
                 

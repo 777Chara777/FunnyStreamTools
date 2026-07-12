@@ -23,7 +23,7 @@ def generate_sdk_auto(package_name="app"):
                 except Exception as e:
                     print(f"[!] Warning while importing {mod_name}: {e}")
 
-    sdk_root = os.path.join(os.getcwd(), '.my_app_sdk')
+    sdk_root = os.path.join(os.getcwd(), '.app_sdk')
     target_package_dir = os.path.join(sdk_root, package_name)
     os.makedirs(target_package_dir, exist_ok=True)
 

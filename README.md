@@ -30,14 +30,15 @@
 
 ## 📦 Installation
 
-1. **Clone the repository**:
+1. **Clone the repository**
+
 ```bash
 git clone https://github.com/777Chara777/FunnyStreamTools.git
 cd FunnyStreamTools
 
 ```
 
-2. **Install dependencies**:
+2. **Install dependencies**
 
 ```bash
 uv sync
@@ -75,24 +76,31 @@ The server will start at `http://127.0.0.1:8000`.
 
 FunnyStreamTools supports a modular architecture for creating custom UI widgets and data providers. To get full IDE autocomplete, type hints, and documentation for the core API, you can generate a custom SDK directly from the application.
 
-Generate the `.pyi` stub files by running:
+### 📥 How to Get the SDK
+
+> ⚠️ **Important:** Due to Python compilation inside the compiled binary (`.exe`), **you cannot generate the SDK from the standalone executable file**. 
+
+You can obtain the `.app_sdk/` stub files in two ways:
+
+1. **Download Pre-generated Release (Recommended):** Download the pre-built `sdk.zip` archive directly from the **GitHub Releases** section of this repository and extract it into your project root.
+
+2. **Generate locally via Dev Version:** If you are running the project from source code, you can easily generate the `.pyi` stub files manually by running:
 
 ```bash
 uv run main.py --generate-sdk
 
 ```
 
-This will create a `.my_app_sdk/` directory in your workspace.
-
 ### Setting up your IDE
 
-* **VS Code**: Add `".my_app_sdk"` to your `python.analysis.extraPaths` settings.
-* **PyCharm**: Right-click the `.my_app_sdk` folder -> *Mark Directory as* -> *Excluded* (or add it as an External Library) so the IDE indexes the stubs for auto-completion.
+* **VS Code**: Add `".app_sdk"` to your `python.analysis.extraPaths` settings.
+* **PyCharm**: Right-click the `.app_sdk` folder -> *Mark Directory as* -> *Excluded* (or add it as an External Library) so the IDE indexes the stubs for auto-completion.
 
 ### 🔌 Managing Third-Party Dependencies for External Plugins
+
 If your external plugins require specific third-party libraries (e.g., `requests`, `aiohttp`, etc.) that are not packaged inside the core binary, the app will automatically resolve them from a **local virtual environment (`.venv`)** placed right next to the executable.
 
-Simply make sure that a `.venv` directory containing the required modules is present in the same folder as `main.exe` (as shown in the folder tree above). On startup, the core application will automatically inject `.venv/Lib/site-packages` into its execution path to load plugin dependencies seamlessly.
+Simply make sure that a `.venv` directory containing the required modules is present in the same folder as `FunnyStreamTools.exe` (as shown in the folder tree above). On startup, the core application will automatically inject `.venv/Lib/site-packages` into its execution path to load plugin dependencies seamlessly.
 
 ## 🧩 How it works
 
