@@ -22,6 +22,16 @@
 * **Modular Architecture**: Easily add new data providers (e.g., YouTube, Discord) and UI plugins without touching the core engine.
 * **Event-Driven**: Built on an asynchronous event bus, ensuring high performance and low latency for your stream overlays.
 
+## Why FunnyStreamTools?
+
+Unlike traditional streaming overlays, FunnyStreamTools is built as an extensible platform:
+
+- 🔌 Create your own plugins and providers
+- 🎨 Build custom OBS browser overlays with HTML/CSS/JS
+- ⚡ React to Twitch, Discord, and other events in real time
+- 🧩 Extend functionality without modifying the core application
+- 📦 Develop plugins with the included SDK and type hints
+
 ## 🛠 Prerequisites
 
 * **Python 3.10+**
