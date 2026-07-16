@@ -1,9 +1,12 @@
-import asyncio
+from typing import Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eventbus import EventBus
 
 class BaseProvider:
     def __init__(self, provider_id: str, bus, **kwargs):
         self.provider_id = provider_id
-        self.bus = bus
+        self.bus: "EventBus" = bus
         self.running = True
 
     async def start(self):
@@ -16,3 +19,7 @@ class BaseProvider:
         Constructs a topic in the format 'twitch:chat_message'"""
         topic = f"{self.provider_id}:{event_type}"
         await self.bus.publish(topic, data)
+
+    async def subscribe_to(self, topic: str, callback: Callable):
+        """Allows the provider to subscribe to another topic within the Python code."""
+        await self.bus.subscribe(topic, None, callback)

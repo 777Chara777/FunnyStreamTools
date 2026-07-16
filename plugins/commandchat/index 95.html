@@ -512,7 +512,7 @@
                 let isBlockedCommand = block.includes(firstWord);
 
                 if (hasPermission) {
-                    if (messageText === '!cls' || messageText === '!clear' || messageText === 'cls') {
+                    if (messageText === '/clear') {
                         clearConsoleLog();
                         return;
                     }

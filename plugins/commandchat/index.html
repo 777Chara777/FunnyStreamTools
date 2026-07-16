@@ -583,7 +583,7 @@
                 }
             }
             
-            if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "system clear")) {
+            if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "/clear")) {
                 clearConsoleLog();
             }
         };
