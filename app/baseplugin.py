@@ -10,7 +10,7 @@ if typing.TYPE_CHECKING:
     from app.eventbus import EventBus
 
 class BasePlugin:
-    def __init__(self, name: str, prefix: str, bus: EventBus, subscribed_topics: list, current_theme: str = "index.html", **kwargs):
+    def __init__(self, name: str, prefix: str, bus: "EventBus", subscribed_topics: list, current_theme: str = "index.html", **kwargs):
         self.name = name
         self.router = APIRouter(prefix=prefix, tags=[name])
         self.bus = bus

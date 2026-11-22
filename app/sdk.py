@@ -98,17 +98,17 @@ def generate_sdk_auto(package_name="app"):
                 #     raise
 
                 if hasattr(obj, "__init__"):
-                    # try:
-                    init_sig = inspect.signature(obj.__init__)
-                    for param_name, param in init_sig.parameters.items():
-                        if param_name in fields and param.annotation != inspect.Parameter.empty:
-                            if hasattr(param.annotation, "__name__"):
-                                fields[param_name] = param.annotation.__name__
-                            else:
-                                clean_ann = str(param.annotation).replace("'", "").replace('"', "")
-                                fields[param_name] = clean_ann
-                    # except Exception:
-                    #     raise
+                    try:
+                        init_sig = inspect.signature(obj.__init__)
+                        for param_name, param in init_sig.parameters.items():
+                            if param_name in fields and param.annotation != inspect.Parameter.empty:
+                                if hasattr(param.annotation, "__name__"):
+                                    fields[param_name] = param.annotation.__name__
+                                else:
+                                    clean_ann = str(param.annotation).replace("'", "").replace('"', "")
+                                    fields[param_name] = clean_ann
+                    except NameError:
+                        raise
 
                 for attr_name, attr_type in fields.items():
                     if attr_type in class_locations and class_locations[attr_type] != mod_name:
