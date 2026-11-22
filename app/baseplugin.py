@@ -54,7 +54,7 @@ class BasePlugin:
                 return HTMLResponse(content="<h1>Widget UI not found</h1>", status_code=404)
                 
             async with aiofiles.open(theme_path, "r", encoding="utf-8") as f:
-                return f.read()
+                return await f.read()
 
 
 
