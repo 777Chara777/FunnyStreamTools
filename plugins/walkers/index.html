@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>FunnyStreamTools - Chat Walkers Chaos</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent;
+            pointer-events: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<canvas id="walkersCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('walkersCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const MAX_WALKERS = 110;
+    const MAX_DROPS = 20;
+    const MAX_PARTICLES = 90;
+    const IDLE_TIMEOUT_MS = 4 * 60 * 1000;
+    const COMMAND_COOLDOWN_MS = 1400;
+    const BUBBLE_DURATION_MS = 4500;
+    const MAX_BUBBLE_CHARS = 90;
+    const AUTO_EVENT_INTERVAL_MS = 55000;
+
+    const ALLOWED_EMOTE_HOSTS = new Set([
+        'static-cdn.jtvnw.net',
+        'cdn.7tv.app',
+        'cdn.betterttv.net',
+        'cdn.frankerfacez.com'
+    ]);
+
+    const walkers = new Map();
+    const aliasToKey = new Map();
+    const emoteImageCache = new Map();
+    const knownEmoteUrls = [];
+    const drops = [];
+    const particles = [];
+
+    let ws = null;
+    let reconnectAttempt = 0;
+    let reconnectTimer = null;
+    let lastFrameTime = performance.now();
+    let nextAutoEventAt = performance.now() + AUTO_EVENT_INTERVAL_MS;
+    let protestUntil = 0;
+    let activeWorldEvent = null; // { type: 'low_grav' | 'slippery' | 'emote_storm', label, until }
+    let activeDuel = null;       // { aKey, bKey, until }
+    let nextStormDropAt = 0;
+
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function safeColor(value, fallback = '#00ff00') {
+        if (typeof value !== 'string') return fallback;
+        const trimmed = value.trim();
+        return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
+    }
+
+    function isSafeEmoteUrl(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+        try {
+            const parsed = new URL(rawUrl.trim());
+            if (parsed.protocol !== 'https:') return false;
+            if (parsed.username || parsed.password) return false;
+            return ALLOWED_EMOTE_HOSTS.has(parsed.hostname);
+        } catch {
+            return false;
+        }
+    }
+
+    function getEmoteImage(url) {
+        if (!isSafeEmoteUrl(url)) return null;
+        const cleanUrl = url.trim();
+        if (emoteImageCache.has(cleanUrl)) {
+            return emoteImageCache.get(cleanUrl);
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = cleanUrl;
+        const entry = { img, loaded: false };
+        img.onload = () => { entry.loaded = true; };
+        emoteImageCache.set(cleanUrl, entry);
+
+        if (!knownEmoteUrls.includes(cleanUrl)) {
+            knownEmoteUrls.push(cleanUrl);
+            if (knownEmoteUrls.length > 60) knownEmoteUrls.shift();
+        }
+        return entry;
+    }
+
+    function getGroundY() {
+        return window.innerHeight - 28;
+    }
+
+    function getJailRect() {
+        const groundY = getGroundY();
+        const width = 220;
+        const height = 82;
+        const x = 24;
+        const y = groundY - height + 4;
+        return { x, y, width, height, floorY: groundY };
+    }
+
+    function registerAliases(walker, ids = []) {
+        for (const raw of ids) {
+            if (typeof raw === 'string' && raw.trim()) {
+                aliasToKey.set(raw.trim().toLowerCase(), walker.key);
+            }
+        }
+    }
+
+    function findWalkerByAliases(ids = []) {
+        for (const raw of ids) {
+            if (typeof raw !== 'string' || !raw.trim()) continue;
+            const mapped = aliasToKey.get(raw.trim().toLowerCase());
+            if (mapped && walkers.has(mapped)) {
+                return walkers.get(mapped);
+            }
+        }
+        return null;
+    }
+
+    function spawnParticles(x, y, colors = ['#facc15', '#38bdf8', '#f472b6', '#4ade80'], count = 18) {
+        for (let i = 0; i < count; i++) {
+            if (particles.length >= MAX_PARTICLES) particles.shift();
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 70 + Math.random() * 220;
+            particles.push({
+                x,
+                y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 90,
+                size: 3 + Math.random() * 4,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                life: 0.7 + Math.random() * 0.6,
+                maxLife: 1.3
+            });
+        }
+    }
+
+    function spawnDropObject(emoteUrl = null, x = null) {
+        if (drops.length >= MAX_DROPS) drops.shift();
+        const w = window.innerWidth;
+        const chosenUrl = emoteUrl || (knownEmoteUrls.length > 0
+            ? knownEmoteUrls[Math.floor(Math.random() * knownEmoteUrls.length)]
+            : null);
+        const imgEntry = chosenUrl ? getEmoteImage(chosenUrl) : null;
+
+        drops.push({
+            x: x !== null ? x : 270 + Math.random() * Math.max(100, w - 320),
+            y: -25 - Math.random() * 60,
+            vx: (Math.random() - 0.5) * 140,
+            vy: 60 + Math.random() * 120,
+            radius: 15,
+            rot: Math.random() * Math.PI * 2,
+            vRot: (Math.random() - 0.5) * 6,
+            bounces: 0,
+            imgEntry,
+            color: ['#fbbf24', '#38bdf8', '#a78bfa', '#fb7185'][Math.floor(Math.random() * 4)],
+            createdAt: performance.now()
+        });
+    }
+
+    function buildBubbleFromData(data) {
+        const items = [];
+        let charCount = 0;
+
+        if (Array.isArray(data.segments) && data.segments.length > 0) {
+            for (const seg of data.segments) {
+                if (!seg || typeof seg !== 'object') continue;
+                if (seg.type === 'emote' && isSafeEmoteUrl(seg.url)) {
+                    const cached = getEmoteImage(seg.url.trim());
+                    items.push({
+                        type: 'emote',
+                        url: seg.url.trim(),
+                        imgEntry: cached,
+                        label: typeof seg.name === 'string' ? seg.name : '[emote]'
+                    });
+                    charCount += 4;
+                } else if (seg.type === 'text' && typeof seg.value === 'string' && seg.value) {
+                    const remaining = MAX_BUBBLE_CHARS - charCount;
+                    if (remaining <= 0) break;
+                    const slice = seg.value.slice(0, remaining);
+                    charCount += slice.length;
+                    items.push({ type: 'text', value: slice });
+                }
+                if (charCount >= MAX_BUBBLE_CHARS) break;
+            }
+        } else if (typeof data.text === 'string' && data.text.trim()) {
+            items.push({
+                type: 'text',
+                value: data.text.trim().slice(0, MAX_BUBBLE_CHARS)
+            });
+        }
+
+        if (items.length === 0) return null;
+        if (charCount >= MAX_BUBBLE_CHARS) {
+            items.push({ type: 'text', value: '…' });
+        }
+
+        return {
+            items,
+            createdAt: performance.now(),
+            expiresAt: performance.now() + BUBBLE_DURATION_MS
+        };
+    }
+
+    function createWalker(key, data, { jailed = false, jailUntil = null } = {}) {
+        const jail = getJailRect();
+        const w = window.innerWidth;
+        const startX = jailed
+            ? jail.x + 30 + Math.random() * Math.max(20, jail.width - 60)
+            : Math.max(260, Math.min(w - 40, Math.random() * Math.max(100, w - 300) + 260));
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const speed = jailed ? 28 + Math.random() * 18 : 55 + Math.random() * 45;
+
+        const displayName = typeof data.user === 'string' && data.user.trim()
+            ? data.user.trim().slice(0, 24)
+            : (typeof data.targetUser === 'string' && data.targetUser.trim()
+                ? data.targetUser.trim().slice(0, 24)
+                : 'viewer');
+
+        return {
+            key,
+            name: displayName,
+            color: safeColor(data.color, '#00ff00'),
+            x: startX,
+            y: getGroundY(),
+            vy: 0,
+            vx: dir * speed,
+            speed,
+            dir,
+            mode: 'walk', // 'walk' | 'idle' | 'panic' | 'seek_bonk'
+            scale: 1,
+            scaleUntil: 0,
+            panicUntil: 0,
+            stunnedUntil: 0,
+            crownUntil: 0,
+            bonkTargetKey: null,
+            stepPhase: Math.random() * Math.PI * 2,
+            lastActive: performance.now(),
+            lastCommandAt: 0,
+            bubble: null,
+            jailed,
+            jailUntil
+        };
+    }
+
+    function evictOldestIfNeeded() {
+        if (walkers.size <= MAX_WALKERS) return;
+        let oldestKey = null;
+        let oldestTime = Infinity;
+
+        for (const [k, w] of walkers.entries()) {
+            if (w.jailed) continue;
+            if (w.lastActive < oldestTime) {
+                oldestTime = w.lastActive;
+                oldestKey = k;
+            }
+        }
+        if (oldestKey) {
+            walkers.delete(oldestKey);
+        }
+    }
+
+    function triggerBonk(attacker, target) {
+        if (!target || target.key === attacker.key || target.jailed) return;
+        const dirToTarget = target.x >= attacker.x ? 1 : -1;
+        attacker.dir = dirToTarget;
+        target.vx = dirToTarget * 340;
+        target.vy = -260;
+        target.stunnedUntil = performance.now() + 2200;
+        target.bubble = {
+            items: [{ type: 'text', value: `БОНК от ${attacker.name}!` }],
+            createdAt: performance.now(),
+            expiresAt: performance.now() + 2600
+        };
+        spawnParticles(target.x, target.y - 25, ['#fbbf24', '#f87171', '#ffffff'], 16);
+    }
+
+    function startDuel(challenger, rawTargetName) {
+        const now = performance.now();
+        let opponent = null;
+
+        if (rawTargetName) {
+            const cleanTarget = rawTargetName.replace(/^@/, '').trim().toLowerCase();
+            opponent = findWalkerByAliases([cleanTarget]);
+        }
+        if (!opponent) {
+            const candidates = Array.from(walkers.values()).filter(
+                w => w.key !== challenger.key && !w.jailed
+            );
+            if (candidates.length > 0) {
+                opponent = candidates[Math.floor(Math.random() * candidates.length)];
+            }
+        }
+        if (!opponent) return;
+
+        challenger.vy = -420;
+        opponent.vy = -420;
+        challenger.vx = (Math.random() < 0.5 ? -1 : 1) * 180;
+        opponent.vx = -challenger.vx;
+
+        const aIsChallenger = Math.random() < 0.5;
+        const winner = aIsChallenger ? challenger : opponent;
+        const loser = aIsChallenger ? opponent : challenger;
+
+        setTimeout(() => {
+            if (!walkers.has(winner.key)) return;
+            winner.crownUntil = performance.now() + 25000;
+            winner.vy = -340;
+            winner.bubble = {
+                items: [{ type: 'text', value: `ПОБЕДА над ${loser.name}!` }],
+                createdAt: performance.now(),
+                expiresAt: performance.now() + 3500
+            };
+            spawnParticles(winner.x, winner.y - 45, ['#facc15', '#fde047', '#ffffff'], 24);
+        }, 1200);
+
+        activeDuel = { aKey: challenger.key, bKey: opponent.key, until: now + 3500 };
+    }
+
+    function applyChatCommand(walker, text) {
+        if (walker.jailed || performance.now() < walker.stunnedUntil) return;
+        const now = performance.now();
+        if (now - walker.lastCommandAt < COMMAND_COOLDOWN_MS) return;
+
+        const rawLower = text.trim().toLowerCase();
+        const tokens = rawLower.split(/\s+/);
+        const cmd = tokens[0] || '';
+        const arg1 = tokens[1] || '';
+
+        const jumpCmds = new Set(['!jump', '/jump', 'прыг', 'прыжок', 'прыгай']);
+        const leftCmds = new Set(['!left', 'влево', 'налево']);
+        const rightCmds = new Set(['!right', 'вправо', 'направо']);
+        const stopCmds = new Set(['!stop', 'стой', 'стоп', 'замри']);
+        const walkCmds = new Set(['!walk', 'иди', 'ходи', 'го']);
+        const bonkCmds = new Set(['!bonk', '!punch', 'бонк', 'ударить']);
+
+        if (jumpCmds.has(cmd) || /\b(прыг|jump)\b/i.test(rawLower)) {
+            if (walker.y >= getGroundY() - 1) {
+                walker.vy = activeWorldEvent?.type === 'low_grav' ? -520 : -340;
+                walker.lastCommandAt = now;
+            }
+            return;
+        }
+
+        if (bonkCmds.has(cmd)) {
+            const cleanTarget = arg1.replace(/^@/, '').trim().toLowerCase();
+            let target = cleanTarget ? findWalkerByAliases([cleanTarget]) : null;
+            if (!target) {
+                const others = Array.from(walkers.values()).filter(
+                    w => w.key !== walker.key && !w.jailed
+                );
+                if (others.length > 0) {
+                    target = others[Math.floor(Math.random() * others.length)];
+                }
+            }
+            if (target) {
+                if (Math.abs(target.x - walker.x) < 60) {
+                    triggerBonk(walker, target);
+                } else {
+                    walker.mode = 'seek_bonk';
+                    walker.bonkTargetKey = target.key;
+                    walker.dir = target.x >= walker.x ? 1 : -1;
+                    walker.vx = walker.dir * (walker.speed * 2.2);
+                }
+                walker.lastCommandAt = now;
+            }
+            return;
+        }
+
+        if (cmd === '!big' || cmd === 'гигант') {
+            walker.scale = 1.9;
+            walker.scaleUntil = now + 25000;
+            walker.vy = -260;
+            walker.lastCommandAt = now;
+            spawnParticles(walker.x, walker.y - 20, [walker.color, '#ffffff'], 12);
+            return;
+        }
+
+        if (cmd === '!small' || cmd === 'мелкий') {
+            walker.scale = 0.58;
+            walker.scaleUntil = now + 25000;
+            walker.vy = -220;
+            walker.lastCommandAt = now;
+            spawnParticles(walker.x, walker.y - 10, [walker.color, '#38bdf8'], 12);
+            return;
+        }
+
+        if (cmd === '!panic' || cmd === 'паника') {
+            walker.mode = 'panic';
+            walker.panicUntil = now + 10000;
+            walker.dir = Math.random() < 0.5 ? -1 : 1;
+            walker.vx = walker.dir * (walker.speed * 2.6);
+            walker.vy = -260;
+            walker.lastCommandAt = now;
+            return;
+        }
+
+        if (cmd === '!drop' || cmd === 'дроп') {
+            spawnDropObject(null, walker.x);
+            walker.lastCommandAt = now;
+            return;
+        }
+
+        if (cmd === '!duel' || cmd === 'дуэль') {
+            startDuel(walker, arg1);
+            walker.lastCommandAt = now;
+            return;
+        }
+
+        if (leftCmds.has(cmd)) {
+            walker.mode = 'walk';
+            walker.dir = -1;
+            walker.vx = -walker.speed;
+            walker.lastCommandAt = now;
+        } else if (rightCmds.has(cmd)) {
+            walker.mode = 'walk';
+            walker.dir = 1;
+            walker.vx = walker.speed;
+            walker.lastCommandAt = now;
+        } else if (stopCmds.has(cmd)) {
+            walker.mode = 'idle';
+            walker.vx = 0;
+            walker.lastCommandAt = now;
+        } else if (walkCmds.has(cmd)) {
+            walker.mode = 'walk';
+            walker.vx = walker.dir * walker.speed;
+            walker.lastCommandAt = now;
+        }
+    }
+
+    function releaseFromJail(walker) {
+        const jail = getJailRect();
+        walker.jailed = false;
+        walker.jailUntil = null;
+        walker.mode = 'walk';
+        walker.dir = 1;
+        walker.speed = 55 + Math.random() * 45;
+        walker.vx = walker.speed;
+        walker.x = Math.max(jail.x + jail.width + 24, walker.x);
+        walker.y = getGroundY();
+        walker.vy = 0;
+        walker.lastActive = performance.now();
+    }
+
+    function handleChatMessage(data) {
+        const ids = [data.userId, data.login, data.user];
+        const primaryId = String(data.userId || data.login || data.user || '').trim();
+        if (!primaryId) return;
+
+        let walker = findWalkerByAliases(ids);
+        if (!walker) {
+            walker = createWalker(primaryId, data);
+            walkers.set(primaryId, walker);
+            evictOldestIfNeeded();
+        } else {
+            walker.name = typeof data.user === 'string' && data.user.trim()
+                ? data.user.trim().slice(0, 24)
+                : walker.name;
+            walker.color = safeColor(data.color, walker.color);
+        }
+
+        registerAliases(walker, ids);
+        walker.lastActive = performance.now();
+
+        if (walker.jailed && walker.jailUntil !== null && performance.now() >= walker.jailUntil) {
+            releaseFromJail(walker);
+        }
+
+        if (Array.isArray(data.segments)) {
+            for (const seg of data.segments) {
+                if (seg && seg.type === 'emote' && isSafeEmoteUrl(seg.url)) {
+                    spawnDropObject(seg.url.trim(), walker.x);
+                    break;
+                }
+            }
+        }
+
+        const bubble = buildBubbleFromData(data);
+        if (bubble) {
+            walker.bubble = bubble;
+        }
+
+        const text = typeof data.text === 'string' ? data.text : '';
+        if (text) {
+            applyChatCommand(walker, text);
+        }
+    }
+
+    function handleClearChat(data) {
+        const targetUser = typeof data.targetUser === 'string' ? data.targetUser.trim() : '';
+        const targetUserId = typeof data.targetUserId === 'string' ? data.targetUserId.trim() : '';
+
+        if (!targetUser && !targetUserId) {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            for (let i = 0; i < 6; i++) {
+                spawnParticles((w / 6) * (i + 0.5), h - 40, ['#ef4444', '#f97316', '#facc15'], 12);
+            }
+            for (const walker of walkers.values()) {
+                if (!walker.jailed) {
+                    walker.vy = -260;
+                    walker.bubble = {
+                        items: [{ type: 'text', value: 'ЧАТ ОЧИЩЕН!' }],
+                        createdAt: performance.now(),
+                        expiresAt: performance.now() + 2600
+                    };
+                }
+            }
+            return;
+        }
+
+        const durationSec = typeof data.duration === 'number' && data.duration > 0
+            ? data.duration
+            : null;
+        const jailUntil = durationSec ? performance.now() + durationSec * 1000 : null;
+
+        let walker = findWalkerByAliases([targetUserId, targetUser]);
+        const primaryId = walker ? walker.key : (targetUserId || targetUser.toLowerCase());
+
+        if (!walker) {
+            walker = createWalker(primaryId, {
+                user: targetUser || targetUserId,
+                color: '#ff4d4d'
+            }, { jailed: true, jailUntil });
+            walkers.set(primaryId, walker);
+            evictOldestIfNeeded();
+        } else {
+            walker.jailed = true;
+            walker.jailUntil = jailUntil;
+            walker.mode = 'walk';
+            walker.speed = 30;
+            walker.vx = walker.dir * walker.speed;
+        }
+
+        registerAliases(walker, [targetUserId, targetUser, walker.name]);
+        walker.lastActive = performance.now();
+        walker.bubble = {
+            items: [{
+                type: 'text',
+                value: durationSec ? `Таймаут ${durationSec}с!` : 'БАН!'
+            }],
+            createdAt: performance.now(),
+            expiresAt: performance.now() + BUBBLE_DURATION_MS
+        };
+
+        const jail = getJailRect();
+        protestUntil = performance.now() + 4500;
+        let protestCount = 0;
+        for (const other of walkers.values()) {
+            if (other.key === walker.key || other.jailed || performance.now() < other.stunnedUntil) continue;
+            if (protestCount >= 6) break;
+            other.dir = -1;
+            other.vx = -other.speed * 1.5;
+            other.x = Math.max(jail.x + jail.width + 28 + protestCount * 22, other.x);
+            other.vy = -220;
+            protestCount++;
+        }
+        spawnParticles(jail.x + jail.width / 2, jail.y + jail.height / 2, ['#ef4444', '#f87171'], 20);
+    }
+
+    function handleUserNotice(data) {
+        const now = performance.now();
+        const eventType = String(data.eventType || '').toLowerCase();
+        const userName = typeof data.user === 'string' && data.user.trim()
+            ? data.user.trim()
+            : 'guest';
+
+        for (const w of walkers.values()) {
+            if (!w.jailed && w.y >= getGroundY() - 2) {
+                w.vy = -360;
+            }
+        }
+        spawnParticles(
+            window.innerWidth / 2,
+            window.innerHeight * 0.45,
+            ['#facc15', '#38bdf8', '#c084fc', '#4ade80', '#fb7185'],
+            40
+        );
+
+        const guestKey = `notice_${data.userId || data.login || userName}_${Math.floor(now)}`;
+        const guest = createWalker(guestKey, {
+            user: userName,
+            color: data.color || '#facc15'
+        });
+        const label = eventType === 'raid'
+            ? `РЕЙД от ${userName}!`
+            : `САБ/ИВЕНТ: ${userName}!`;
+        guest.bubble = {
+            items: [{ type: 'text', value: label }],
+            createdAt: now,
+            expiresAt: now + 4500
+        };
+        guest.vy = -380;
+        walkers.set(guestKey, guest);
+        evictOldestIfNeeded();
+
+        if (eventType === 'raid') {
+            for (let i = 0; i < 4; i++) {
+                spawnDropObject(null, window.innerWidth * (0.25 + i * 0.16));
+            }
+        }
+    }
+
+    function triggerRandomWorldEvent(now) {
+        const events = [
+            { type: 'low_grav', label: 'ИВЕНТ: ЛУННАЯ ГРАВИТАЦИЯ', duration: 15000 },
+            { type: 'slippery', label: 'ИВЕНТ: ЛЁД НА ПОЛУ', duration: 15000 },
+            { type: 'emote_storm', label: 'ИВЕНТ: СМАЙЛОПАД', duration: 12000 }
+        ];
+        const chosen = events[Math.floor(Math.random() * events.length)];
+        activeWorldEvent = {
+            type: chosen.type,
+            label: chosen.label,
+            until: now + chosen.duration
+        };
+        nextStormDropAt = now;
+    }
+
+    function updateDropsAndParticles(dt, now) {
+        const groundY = getGroundY();
+        const gravity = activeWorldEvent?.type === 'low_grav' ? 320 : 780;
+
+        if (activeWorldEvent?.type === 'emote_storm' && now >= nextStormDropAt) {
+            spawnDropObject(null);
+            nextStormDropAt = now + 450;
+        }
+
+        for (let i = drops.length - 1; i >= 0; i--) {
+            const d = drops[i];
+            d.vy += gravity * dt;
+            d.x += d.vx * dt;
+            d.y += d.vy * dt;
+            d.rot += d.vRot * dt;
+
+            if (d.x < 250) {
+                d.x = 250;
+                d.vx = Math.abs(d.vx) * 0.8;
+            } else if (d.x > window.innerWidth - 20) {
+                d.x = window.innerWidth - 20;
+                d.vx = -Math.abs(d.vx) * 0.8;
+            }
+
+            if (d.y + d.radius >= groundY) {
+                d.y = groundY - d.radius;
+                d.vy = -Math.abs(d.vy) * 0.62;
+                d.vx *= 0.85;
+                d.bounces += 1;
+
+                for (const w of walkers.values()) {
+                    if (!w.jailed && Math.abs(w.x - d.x) < 28 && w.y >= groundY - 2) {
+                        w.vy = -270;
+                    }
+                }
+            }
+
+            if (d.bounces >= 4 || now - d.createdAt > 10000) {
+                drops.splice(i, 1);
+            }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.vy += 450 * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+            }
+        }
+    }
+
+    function updateWalkers(dt, now) {
+        if (activeWorldEvent && now > activeWorldEvent.until) {
+            activeWorldEvent = null;
+        }
+        if (now >= nextAutoEventAt) {
+            triggerRandomWorldEvent(now);
+            nextAutoEventAt = now + AUTO_EVENT_INTERVAL_MS;
+        }
+
+        const groundY = getGroundY();
+        const jail = getJailRect();
+        const gravity = activeWorldEvent?.type === 'low_grav' ? 380 : 980;
+        const minX = jail.x + jail.width + 24;
+        const maxX = Math.max(minX + 10, window.innerWidth - 28);
+        const isSlippery = activeWorldEvent?.type === 'slippery';
+
+        for (const [key, w] of walkers.entries()) {
+            if (w.jailed && w.jailUntil !== null && now >= w.jailUntil) {
+                releaseFromJail(w);
+            }
+
+            if (!w.jailed && now - w.lastActive > IDLE_TIMEOUT_MS) {
+                walkers.delete(key);
+                continue;
+            }
+
+            if (w.scaleUntil > 0 && now > w.scaleUntil) {
+                w.scale = 1;
+                w.scaleUntil = 0;
+            }
+
+            const isStunned = now < w.stunnedUntil;
+
+            if (w.jailed) {
+                const jMinX = jail.x + 22;
+                const jMaxX = jail.x + jail.width - 22;
+                w.x += w.vx * dt;
+                if (w.x <= jMinX) {
+                    w.x = jMinX;
+                    w.dir = 1;
+                    w.vx = w.speed;
+                } else if (w.x >= jMaxX) {
+                    w.x = jMaxX;
+                    w.dir = -1;
+                    w.vx = -w.speed;
+                }
+                w.y = groundY;
+                w.vy = 0;
+                w.stepPhase += dt * 7;
+            } else if (isStunned) {
+                w.x += w.vx * dt;
+                w.vx *= Math.pow(0.25, dt);
+                if (w.x < minX) w.x = minX;
+                if (w.x > maxX) w.x = maxX;
+            } else {
+                if (w.mode === 'panic' && now > w.panicUntil) {
+                    w.mode = 'walk';
+                    w.vx = w.dir * w.speed;
+                }
+
+                if (w.mode === 'seek_bonk') {
+                    const target = w.bonkTargetKey ? walkers.get(w.bonkTargetKey) : null;
+                    if (!target || target.jailed) {
+                        w.mode = 'walk';
+                        w.bonkTargetKey = null;
+                        w.vx = w.dir * w.speed;
+                    } else {
+                        w.dir = target.x >= w.x ? 1 : -1;
+                        w.vx = w.dir * (w.speed * 2.3);
+                        w.x += w.vx * dt;
+                        if (Math.abs(target.x - w.x) < 26 * Math.max(1, w.scale)) {
+                            triggerBonk(w, target);
+                            w.mode = 'walk';
+                            w.bonkTargetKey = null;
+                            w.vx = w.dir * w.speed;
+                        }
+                    }
+                } else if (w.mode === 'panic') {
+                    w.x += w.vx * dt;
+                    if (w.y >= groundY - 1 && Math.random() < dt * 4) {
+                        w.vy = -240;
+                    }
+                } else if (w.mode === 'walk') {
+                    if (isSlippery) {
+                        w.x += w.vx * dt;
+                        w.vx *= Math.pow(0.88, dt);
+                        if (Math.abs(w.vx) < 20) {
+                            w.vx = w.dir * w.speed;
+                        }
+                    } else {
+                        w.x += w.vx * dt;
+                    }
+                }
+
+                if (w.x <= minX) {
+                    w.x = minX;
+                    w.dir = 1;
+                    w.vx = w.mode === 'panic' ? w.speed * 2.6 : w.speed;
+                } else if (w.x >= maxX) {
+                    w.x = maxX;
+                    w.dir = -1;
+                    w.vx = w.mode === 'panic' ? -w.speed * 2.6 : -w.speed;
+                }
+
+                w.stepPhase += dt * (w.mode === 'panic' ? 20 : 11);
+            }
+
+            if (w.y < groundY || w.vy < 0) {
+                w.vy += gravity * dt;
+                w.y += w.vy * dt;
+                if (w.y >= groundY) {
+                    w.y = groundY;
+                    w.vy = 0;
+                }
+            } else {
+                w.y = groundY;
+            }
+
+            if (w.bubble && now > w.bubble.expiresAt) {
+                w.bubble = null;
+            }
+        }
+    }
+
+    function drawJail(now) {
+        const jailedList = Array.from(walkers.values()).filter(w => w.jailed);
+        if (jailedList.length === 0) return;
+
+        const jail = getJailRect();
+        ctx.save();
+        ctx.fillStyle = 'rgba(24, 24, 27, 0.78)';
+        ctx.fillRect(jail.x, jail.y, jail.width, jail.height);
+
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(jail.x, jail.y, jail.width, jail.height);
+
+        ctx.font = 'bold 11px Consolas, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = now < protestUntil ? '#fde047' : '#fca5a5';
+        ctx.fillText(
+            now < protestUntil ? `ТЮРЬМА (${jailedList.length}) • БУНТ!` : `ТЮРЬМА (${jailedList.length})`,
+            jail.x + 6,
+            jail.y - 4
+        );
+        ctx.restore();
+    }
+
+    function drawJailBars() {
+        const jailedList = Array.from(walkers.values()).filter(w => w.jailed);
+        if (jailedList.length === 0) return;
+
+        const jail = getJailRect();
+        ctx.save();
+        ctx.strokeStyle = 'rgba(212, 212, 216, 0.75)';
+        ctx.lineWidth = 3;
+
+        const step = 18;
+        for (let x = jail.x + step; x < jail.x + jail.width; x += step) {
+            ctx.beginPath();
+            ctx.moveTo(x, jail.y);
+            ctx.lineTo(x, jail.y + jail.height);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    function drawDropsAndParticles() {
+        for (const d of drops) {
+            ctx.save();
+            ctx.translate(d.x, d.y);
+            ctx.rotate(d.rot);
+            if (d.imgEntry && d.imgEntry.loaded) {
+                ctx.drawImage(d.imgEntry.img, -d.radius, -d.radius, d.radius * 2, d.radius * 2);
+            } else {
+                ctx.fillStyle = d.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, d.radius * 0.75, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        for (const p of particles) {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+            ctx.restore();
+        }
+    }
+
+    function drawWorldEventBanner(now) {
+        if (!activeWorldEvent || now > activeWorldEvent.until) return;
+        const secLeft = Math.max(1, Math.ceil((activeWorldEvent.until - now) / 1000));
+        const text = `${activeWorldEvent.label} (${secLeft}s)`;
+
+        ctx.save();
+        ctx.font = 'bold 14px Consolas, monospace';
+        const w = ctx.measureText(text).width + 24;
+        const x = (window.innerWidth - w) / 2;
+        const y = 16;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, 30, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#e0f2fe';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, window.innerWidth / 2, y + 15);
+        ctx.restore();
+    }
+
+    function drawSpeechBubble(w, now) {
+        if (!w.bubble || now > w.bubble.expiresAt) return;
+
+        const remaining = w.bubble.expiresAt - now;
+        const alpha = remaining < 500 ? Math.max(0, remaining / 500) : 1;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = '13px Consolas, monospace';
+
+        const emoteSize = 18;
+        const padX = 10;
+        const padY = 6;
+        const maxWidth = 220;
+
+        const lines = [[]];
+        let currentWidth = 0;
+
+        for (const item of w.bubble.items) {
+            if (item.type === 'emote') {
+                const itemW = emoteSize + 4;
+                if (currentWidth + itemW > maxWidth && lines[lines.length - 1].length > 0) {
+                    lines.push([]);
+                    currentWidth = 0;
+                }
+                lines[lines.length - 1].push({ type: 'emote', imgEntry: item.imgEntry, width: itemW });
+                currentWidth += itemW;
+            } else if (item.type === 'text') {
+                const words = item.value.split(/(\s+)/).filter(Boolean);
+                for (const word of words) {
+                    const ww = ctx.measureText(word).width;
+                    if (currentWidth + ww > maxWidth && lines[lines.length - 1].length > 0) {
+                        lines.push([]);
+                        currentWidth = 0;
+                    }
+                    lines[lines.length - 1].push({ type: 'text', value: word, width: ww });
+                    currentWidth += ww;
+                }
+            }
+        }
+
+        const lineHeight = 22;
+        const boxWidth = Math.max(
+            44,
+            Math.min(
+                maxWidth + padX * 2,
+                Math.max(...lines.map(l => l.reduce((s, el) => s + el.width, 0))) + padX * 2
+            )
+        );
+        const boxHeight = lines.length * lineHeight + padY * 2;
+
+        const bubbleX = Math.max(
+            12,
+            Math.min(window.innerWidth - boxWidth - 12, w.x - boxWidth / 2)
+        );
+        const charTopOffset = (62 + (w.crownUntil > now ? 12 : 0)) * w.scale;
+        const topAnchorY = w.jailed ? getJailRect().y - 18 : w.y - charTopOffset;
+        const bubbleY = Math.max(12, topAnchorY - boxHeight - 8);
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = w.jailed ? '#ef4444' : w.color;
+        ctx.lineWidth = 1.5;
+
+        ctx.beginPath();
+        ctx.roundRect(bubbleX, bubbleY, boxWidth, boxHeight, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        const tailX = Math.max(bubbleX + 10, Math.min(bubbleX + boxWidth - 10, w.x));
+        ctx.beginPath();
+        ctx.moveTo(tailX - 5, bubbleY + boxHeight);
+        ctx.lineTo(tailX, bubbleY + boxHeight + 6);
+        ctx.lineTo(tailX + 5, bubbleY + boxHeight);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        lines.forEach((lineItems, rowIdx) => {
+            let cursorX = bubbleX + padX;
+            const centerY = bubbleY + padY + rowIdx * lineHeight + lineHeight / 2;
+
+            for (const el of lineItems) {
+                if (el.type === 'emote') {
+                    if (el.imgEntry && el.imgEntry.loaded) {
+                        ctx.drawImage(el.imgEntry.img, cursorX, centerY - emoteSize / 2, emoteSize, emoteSize);
+                    }
+                    cursorX += el.width;
+                } else {
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.fillText(el.value, cursorX, centerY);
+                    cursorX += el.width;
+                }
+            }
+        });
+
+        ctx.restore();
+    }
+
+    function drawWalker(w, now) {
+        const isStunned = now < w.stunnedUntil;
+        const legSwing = (w.mode === 'walk' || w.mode === 'panic' || w.mode === 'seek_bonk') && !isStunned
+            ? Math.sin(w.stepPhase) * 7
+            : 0;
+        const bob = (w.mode === 'walk' || w.mode === 'panic' || w.mode === 'seek_bonk') && !isStunned
+            ? Math.abs(Math.cos(w.stepPhase)) * -2.5
+            : 0;
+
+        ctx.save();
+        ctx.translate(w.x, w.y);
+        ctx.scale(w.scale, w.scale);
+        ctx.translate(0, bob);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, -bob, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(-3, -14);
+        ctx.lineTo(-3 + legSwing, -2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(3, -14);
+        ctx.lineTo(3 - legSwing, -2);
+        ctx.stroke();
+
+        ctx.strokeStyle = w.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -28);
+        ctx.lineTo(0, -14);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(-8, -23);
+        ctx.lineTo(8, -23);
+        ctx.stroke();
+
+        ctx.fillStyle = '#111827';
+        ctx.strokeStyle = w.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, -35, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        if (w.crownUntil > now) {
+            ctx.fillStyle = '#facc15';
+            ctx.beginPath();
+            ctx.moveTo(-7, -42);
+            ctx.lineTo(-5, -49);
+            ctx.lineTo(0, -45);
+            ctx.lineTo(5, -49);
+            ctx.lineTo(7, -42);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        if (isStunned) {
+            for (let i = 0; i < 3; i++) {
+                const ang = now * 0.008 + (i * Math.PI * 2) / 3;
+                const sx = Math.cos(ang) * 11;
+                const sy = -46 + Math.sin(ang) * 4;
+                ctx.fillStyle = '#fde047';
+                ctx.fillRect(sx - 2, sy - 2, 4, 4);
+            }
+        }
+
+        const eyeOffsetX = w.dir * 2.5;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(eyeOffsetX - 1, -37, 2, 2);
+        ctx.fillRect(eyeOffsetX + 2.5, -37, 2, 2);
+
+        let label = w.name;
+        if (w.jailed && w.jailUntil !== null) {
+            const leftSec = Math.max(0, Math.ceil((w.jailUntil - now) / 1000));
+            label = `${w.name} [${leftSec}s]`;
+        }
+
+        ctx.font = 'bold 13px Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.strokeText(label, 0, -45);
+        ctx.fillStyle = w.jailed ? '#fca5a5' : w.color;
+        ctx.fillText(label, 0, -45);
+
+        ctx.restore();
+
+        drawSpeechBubble(w, now);
+    }
+
+    function renderLoop(now) {
+        const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        updateWalkers(dt, now);
+        updateDropsAndParticles(dt, now);
+
+        drawJail(now);
+        for (const w of walkers.values()) {
+            drawWalker(w, now);
+        }
+        drawJailBars();
+        drawDropsAndParticles();
+        drawWorldEventBanner(now);
+
+        requestAnimationFrame(renderLoop);
+    }
+
+    function scheduleReconnect() {
+        if (reconnectTimer) return;
+        const delay = Math.min(1000 * (2 ** reconnectAttempt), 15000);
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            initWebSocket();
+        }, delay);
+    }
+
+    function initWebSocket() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const widgetName = window.location.pathname.split('/').filter(Boolean).pop() || 'walkers';
+        const wsUrl = `${protocol}//${window.location.host}/widget/${encodeURIComponent(widgetName)}/ws`;
+
+        const socket = new WebSocket(wsUrl);
+        ws = socket;
+
+        socket.onopen = () => {
+            if (ws === socket) reconnectAttempt = 0;
+        };
+
+        socket.onmessage = (event) => {
+            let packet;
+            try {
+                packet = JSON.parse(event.data);
+            } catch {
+                return;
+            }
+            if (!packet || typeof packet !== 'object' || typeof packet.topic !== 'string') return;
+            const data = packet.data && typeof packet.data === 'object' ? packet.data : {};
+
+            if (packet.topic.endsWith(':message')) {
+                handleChatMessage(data);
+            } else if (packet.topic.endsWith(':clearchat')) {
+                handleClearChat(data);
+            } else if (packet.topic.endsWith(':usernotice')) {
+                handleUserNotice(data);
+            } else if (packet.topic.endsWith(':clear') || data.text === '/clear') {
+                walkers.clear();
+                aliasToKey.clear();
+                drops.length = 0;
+                particles.length = 0;
+            }
+        };
+
+        socket.onclose = () => {
+            if (ws === socket) {
+                ws = null;
+                scheduleReconnect();
+            }
+        };
+
+        socket.onerror = (err) => {
+            console.warn('Walkers WebSocket error:', err);
+        };
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    initWebSocket();
+    requestAnimationFrame(renderLoop);
+</script>
+</body>
+</html>
