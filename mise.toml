@@ -1,0 +1,9 @@
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.lint]
+description = "run ruff and pyright in .venv"
+run = [
+  "uv run ruff check .",
+  "uv run pyright",
+]

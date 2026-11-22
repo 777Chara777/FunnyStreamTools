@@ -10,14 +10,14 @@
             padding: 0;
         }
         body {
-            background-color: transparent; 
+            background-color: transparent;
             font-family: 'Segoe UI', 'Cascadia Code', 'Consolas', monospace;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
             display: flex;
             position: relative;
-            padding: 10px; 
+            padding: 10px;
         }
 
         .window {
@@ -29,7 +29,7 @@
             flex-direction: column;
             border: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-            border-radius: 8px; 
+            border-radius: 8px;
             z-index: 1;
             position: relative;
             overflow: hidden;
@@ -47,7 +47,7 @@
             flex-shrink: 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
+
         .terminal-tab {
             background-color: rgba(25, 25, 25, 0.95);
             height: 100%;
@@ -68,13 +68,13 @@
             color: #61afef;
             font-weight: bold;
         }
-        
+
         .window-controls {
             display: flex;
             height: 100%;
             align-items: center;
         }
-        
+
         .control-btn {
             width: 46px;
             height: 100%;
@@ -86,7 +86,7 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        
+
         .control-btn:hover {
             background-color: rgba(255, 255, 255, 0.08);
         }
@@ -99,7 +99,7 @@
             position: relative;
             flex-grow: 1;
             overflow: hidden;
-            background-color: transparent; 
+            background-color: transparent;
         }
 
         .terminal-body {
@@ -114,17 +114,17 @@
 
         .line {
             word-wrap: break-word;
-            color: #cccccc; 
+            color: #cccccc;
             font-size: 18px;
             line-height: 24px;
             margin-bottom: 6px;
             position: relative;
         }
 
-        .user { color: #98c379; font-weight: normal; } 
-        .prefix { color: #61afef; font-weight: bold; } 
+        .user { color: #98c379; font-weight: normal; }
+        .prefix { color: #61afef; font-weight: bold; }
         .text { color: #abb2bf; }
-        .system-log { color: #5c6370; } 
+        .system-log { color: #5c6370; }
         .system-success { color: #98c379; font-weight: bold; }
         .system-error { color: #e06c75; }
 
@@ -132,7 +132,7 @@
             display: inline-block;
             width: 2px;
             height: 18px;
-            background-color: #ffffff; 
+            background-color: #ffffff;
             margin-left: 2px;
             vertical-align: middle;
             animation: blink 1s infinite;
@@ -149,13 +149,13 @@
             width: 100%;
             height: calc(100% - 40px);
             z-index: 10;
-            pointer-events: none; 
+            pointer-events: none;
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
         }
 
         .emote {
-            height: 1.2em; 
+            height: 1.2em;
             vertical-align: middle;
             margin: 0 2px;
             image-rendering: pixelated;
@@ -197,12 +197,65 @@
     const termContainer = document.getElementById('termContainer');
     const matrixCanvas = document.getElementById('matrixCanvas');
     const ctx = matrixCanvas.getContext('2d');
-    const MAX_LINES = 35; 
+    const MAX_LINES = 35;
+    const MAX_MESSAGE_LENGTH = 500;
+    const ALLOWED_EMOTE_HOSTS = new Set([
+        'static-cdn.jtvnw.net',
+        'cdn.7tv.app',
+        'cdn.betterttv.net',
+        'cdn.frankerfacez.com'
+    ]);
     let matrixInterval = null;
     let isMatrixRunning = false;
     let ws = null;
 
     const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'format', 'shutdown', 'exit'];
+
+    function safeColor(value, fallback = '#98c379') {
+        if (typeof value !== 'string') return fallback;
+        const trimmed = value.trim();
+        return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
+    }
+
+    function isSafeEmoteUrl(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+        try {
+            const parsed = new URL(rawUrl.trim());
+            if (parsed.protocol !== 'https:') return false;
+            if (parsed.username || parsed.password) return false;
+            return ALLOWED_EMOTE_HOSTS.has(parsed.hostname);
+        } catch {
+            return false;
+        }
+    }
+
+    function renderMessageContent(targetSpan, data) {
+        targetSpan.textContent = '';
+
+        if (Array.isArray(data.segments) && data.segments.length > 0) {
+            const frag = document.createDocumentFragment();
+            for (const seg of data.segments) {
+                if (!seg || typeof seg !== 'object') continue;
+                if (seg.type === 'text' && typeof seg.value === 'string') {
+                    frag.appendChild(document.createTextNode(seg.value.slice(0, MAX_MESSAGE_LENGTH)));
+                } else if (seg.type === 'emote' && isSafeEmoteUrl(seg.url)) {
+                    const img = document.createElement('img');
+                    img.className = 'emote';
+                    img.src = seg.url.trim();
+                    img.alt = typeof seg.name === 'string' ? seg.name : 'emote';
+                    img.loading = 'lazy';
+                    frag.appendChild(img);
+                }
+            }
+            targetSpan.appendChild(frag);
+            return;
+        }
+
+        const fallbackText = typeof data.text === 'string'
+            ? data.text.slice(0, MAX_MESSAGE_LENGTH)
+            : '';
+        targetSpan.textContent = fallbackText;
+    }
 
     function playTerminalBeep() {
         try {
@@ -210,7 +263,7 @@
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(600, audioCtx.currentTime); 
+            oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
             gainNode.gain.setValueAtTime(0.005, audioCtx.currentTime);
             oscillator.connect(gainNode);
             gainNode.connect(audioCtx.destination);
@@ -221,11 +274,12 @@
     }
 
     function typeEffect(element, text, speed, callback) {
+        const safeText = String(text).slice(0, MAX_MESSAGE_LENGTH);
         let i = 0;
-        element.textContent = "";
+        element.textContent = '';
         function type() {
-            if (i < text.length) {
-                element.textContent += text.charAt(i);
+            if (i < safeText.length) {
+                element.textContent += safeText.charAt(i);
                 i++;
                 setTimeout(type, speed);
             } else if (callback) {
@@ -241,7 +295,7 @@
 
         const lines = terminal.getElementsByClassName('line');
         if (lines.length === 0) return;
-        
+
         const lastLine = lines[lines.length - 1];
         const cursor = document.createElement('span');
         cursor.className = 'cursor';
@@ -253,7 +307,7 @@
     function printPingRow(text, className = 'system-log') {
         const line = document.createElement('div');
         line.className = `line ${className}`;
-        line.innerHTML = text;
+        line.textContent = text;
         terminal.appendChild(line);
         while (terminal.getElementsByClassName('line').length > MAX_LINES) {
             terminal.removeChild(terminal.firstChild);
@@ -262,66 +316,96 @@
     }
 
     function initWebSocket() {
-        ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const widgetName = window.location.pathname.split('/').filter(Boolean).pop() || '';
+        ws = new WebSocket(`${protocol}//${window.location.host}/widget/${encodeURIComponent(widgetName)}/ws`);
 
         ws.onmessage = function(event) {
-            const packet = JSON.parse(event.data);
-            if (packet.topic.endsWith(':message')) {
-                const data = packet.data;
-                const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
-                const hasPermission = data.isMod === true;
+            let packet;
+            try {
+                packet = JSON.parse(event.data);
+            } catch {
+                return;
+            }
 
+            if (packet && typeof packet.topic === 'string' && packet.topic.endsWith(':message')) {
+                const data = packet.data && typeof packet.data === 'object' ? packet.data : {};
                 playTerminalBeep();
 
                 const line = document.createElement('div');
-                const content = data.html_text || data.text; 
                 line.className = 'line';
-                line.innerHTML = `
-                    <span class="prefix">PS C:\\Users\\Stream&gt;</span> 
-                    <span class="user" style="color: ${data.color || '#98c379'}">[${data.user}]</span> 
-                    <span class="text">:: ${content}</span>
-                `;
+
+                const prefixSpan = document.createElement('span');
+                prefixSpan.className = 'prefix';
+                prefixSpan.textContent = 'PS C:\\Users\\Stream> ';
+
+                const userSpan = document.createElement('span');
+                userSpan.className = 'user';
+                userSpan.style.color = safeColor(data.color, '#98c379');
+                const safeUser = typeof data.user === 'string' && data.user.trim() ? data.user.trim() : 'anonymous';
+                userSpan.textContent = `[${safeUser}] `;
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'text';
+                textSpan.appendChild(document.createTextNode(':: '));
+
+                const contentSpan = document.createElement('span');
+                renderMessageContent(contentSpan, data);
+                textSpan.appendChild(contentSpan);
+
+                line.append(prefixSpan, userSpan, textSpan);
                 terminal.appendChild(line);
                 updateCursorPosition();
             }
         };
-    };
+    }
 
     function startBootSequence() {
         const header = document.createElement('div');
         header.className = 'line system-log';
         header.style.marginBottom = '20px';
-        header.innerHTML = `Windows PowerShell<br>Copyright (C) Microsoft Corporation. All rights reserved.<br>Install the latest PowerShell for new features and improvements!`;
+        header.appendChild(document.createTextNode('Windows PowerShell'));
+        header.appendChild(document.createElement('br'));
+        header.appendChild(document.createTextNode('Copyright (C) Microsoft Corporation. All rights reserved.'));
+        header.appendChild(document.createElement('br'));
+        header.appendChild(document.createTextNode('Install the latest PowerShell for new features and improvements!'));
         terminal.appendChild(header);
 
         setTimeout(() => {
             const line1 = document.createElement('div');
             line1.className = 'line';
-            line1.innerHTML = `<span class="prefix">PS C:\\FunnyStreamTools&gt;</span> <span class="cmd-text"></span>`;
+            const prefix1 = document.createElement('span');
+            prefix1.className = 'prefix';
+            prefix1.textContent = 'PS C:\\FunnyStreamTools> ';
+            const textSpan1 = document.createElement('span');
+            textSpan1.className = 'cmd-text';
+            line1.append(prefix1, textSpan1);
             terminal.appendChild(line1);
             updateCursorPosition();
 
-            const textSpan1 = line1.querySelector('.cmd-text');
             typeEffect(textSpan1, './boot --init', 60, () => {
                 playTerminalBeep();
                 updateCursorPosition();
 
                 const line2 = document.createElement('div');
                 line2.className = 'line system-log';
-                line2.innerHTML = `<span class="prefix">↳</span> Connecting to CoreEngine via WebSocket...`;
+                const arrow = document.createElement('span');
+                arrow.className = 'prefix';
+                arrow.textContent = '↳ ';
+                line2.append(arrow, document.createTextNode('Connecting to CoreEngine via WebSocket...'));
                 terminal.appendChild(line2);
                 updateCursorPosition();
 
                 setTimeout(() => {
                     const successLine = document.createElement('div');
                     successLine.className = 'line system-success';
-                    successLine.innerHTML = `✔ SUCCESS: Connected to EventBus active context.`; 
+                    successLine.textContent = '✔ SUCCESS: Connected to EventBus active context.';
                     terminal.appendChild(successLine);
                     playTerminalBeep();
                     updateCursorPosition();
 
                     initWebSocket();
-                }, 1800); 
+                }, 1800);
             });
         }, 600);
     }

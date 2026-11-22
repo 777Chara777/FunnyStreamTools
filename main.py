@@ -1,6 +1,7 @@
-import uvicorn
-import dotenv
 import sys
+
+import dotenv
+import uvicorn
 
 from app.main import app
 

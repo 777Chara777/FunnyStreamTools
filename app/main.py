@@ -1,16 +1,17 @@
+import asyncio
+import importlib
+import inspect
+import json
+import logging
 import os
 import sys
-import json
-import inspect
-import logging
-import importlib
-import asyncio
-
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from app.eventbus import bus
-from app.baseprovider import BaseProvider
+
 from app.baseplugin import BasePlugin
+from app.baseprovider import BaseProvider
+from app.eventbus import bus
 
 IS_DEBUG = not getattr(sys, 'frozen', False)
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,14 @@ if getattr(sys, 'frozen', False):
 logging.basicConfig(level=logging.DEBUG if IS_DEBUG else logging.INFO)
 logger = logging.getLogger("FunnyStreamTools")
 
-app = FastAPI(title="FunnyStreamTools")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await engine.start_providers()
+    yield
+    await engine.stop_providers()
+
+
+app = FastAPI(title="FunnyStreamTools", lifespan=lifespan)
 
 class FunnyStreamTools:
     def __init__(self, fastapi_app):
@@ -68,21 +76,47 @@ class FunnyStreamTools:
     async def reload_modules(self):
         """Full directory rescan, disabling old modules, and adding new ones."""
         self.config = self._load_config()
-        
-        self.stop_providers()
+
+        await self.stop_providers()
         self.providers.clear()
         self.background_tasks.clear()
+        self.plugin_providers_map.clear()
+        bus.clear()
 
         self.app.router.routes = [
-            route for route in self.app.router.routes 
+            route
+            for route in self.app.router.routes
             if not (hasattr(route, "path") and route.path.startswith("/widget/"))
         ]
         self.widgets.clear()
 
         self.load_all()
-        
         await self.start_providers()
         print("[*] All modules have been successfully re-read from the disk!")
+
+    async def stop_providers(self):
+        for p_id, provider in self.providers.items():
+            provider.running = False
+            stop_fn = getattr(provider, "stop", None)
+            if callable(stop_fn):
+                try:
+                    logger.info(f"Stopping provider: {p_id}")
+                    res = stop_fn()
+                    if asyncio.iscoroutine(res):
+                        await asyncio.wait_for(res, timeout=3.0)
+                except TimeoutError:
+                    logger.warning(f"Provider {p_id} stop() timed out")
+                except Exception as e:
+                    logger.warning(f"Error stopping provider {p_id}: {e}")
+
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+
+        if self.background_tasks:
+            _done, pending = await asyncio.wait(self.background_tasks, timeout=3.0)
+            for t in pending:
+                logger.warning(f"Task did not finish in time: {t.get_name() if hasattr(t, 'get_name') else t}")
 
 
     def load_all(self):
@@ -148,19 +182,19 @@ class FunnyStreamTools:
                         if inspect.isclass(obj) and issubclass(obj, base_class) and obj is not base_class:
                             
                             if is_provider:
-                                instance = obj(provider_id=name, bus=bus)
+                                instance = obj(provider_id=name, bus=bus) # type: ignore
                                 registry[name] = instance
                                 print(f"[+] [{layer_name.upper()}] Init class {obj.__name__}")
                             else:
                                 current_theme = module_config.get("current_theme", "index.html")
                                 instance = obj(
-                                    name=name, 
-                                    prefix=f"/widget/{name}",
-                                    bus=bus,
-                                    subscribed_topics=[],
-                                    current_theme=current_theme
-                                )
-                                self.app.include_router(instance.router)
+                                    name=name, # type: ignore
+                                    prefix=f"/widget/{name}", # type: ignore
+                                    bus=bus, # type: ignore
+                                    subscribed_topics=[], # type: ignore
+                                    current_theme=current_theme # type: ignore
+                                ) 
+                                self.app.include_router(instance.router) # type: ignore
                                 registry[name] = instance
                                 print(f"[+] [{layer_name.upper()}] Init class {obj.__name__}")
                                 
@@ -184,19 +218,5 @@ class FunnyStreamTools:
             task = asyncio.create_task(provider.start())
             self.background_tasks.append(task)
 
-    def stop_providers(self):
-        for provider in self.providers.values():
-            provider.running = False
-        for task in self.background_tasks:
-            task.cancel()
-
 engine = FunnyStreamTools(app)
 engine.load_all()
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await engine.start_providers()
-    yield
-    engine.stop_providers()
-
-app.router.lifespan_context = lifespan

@@ -10,14 +10,14 @@
             padding: 0;
         }
         body {
-            background-color: transparent; 
+            background-color: transparent;
             font-family: 'Consolas', 'Courier New', Courier, monospace;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
             display: flex;
             position: relative;
-            padding: 4px; 
+            padding: 4px;
         }
 
         .window {
@@ -27,7 +27,7 @@
             display: flex;
             flex-direction: column;
             border: 3px solid;
-            border-color: #ffffff #0a0a0a #0a0a0a #ffffff; 
+            border-color: #ffffff #0a0a0a #0a0a0a #ffffff;
             box-shadow: inset 1px 1px 0px #dfdfdf, inset -1px -1px 0px #808080;
             border-radius: 0;
             z-index: 1;
@@ -46,21 +46,21 @@
             user-select: none;
             flex-shrink: 0;
         }
-        
+
         .title-text {
             color: #ffffff;
             font-family: "MS Sans Serif", Arial, sans-serif;
             font-size: 18px;
             font-weight: bold;
         }
-        
+
         .window-controls {
             display: flex;
             height: 100%;
             align-items: center;
             gap: 2px;
         }
-        
+
         .control-btn {
             width: 16px;
             height: 16px;
@@ -75,20 +75,20 @@
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            padding-bottom: 2px; 
+            padding-bottom: 2px;
         }
-        
+
         .control-btn.close {
             font-size: 11px;
             padding-bottom: 0px;
         }
-        
+
         .control-btn:active {
             border-color: #0a0a0a #ffffff #ffffff #0a0a0a;
             padding-top: 2px;
             padding-left: 2px;
         }
-        
+
         .control-btn.close:hover, .control-btn:not(.close):hover {
             background-color: #c0c0c0;
             color: #000000;
@@ -98,10 +98,10 @@
             position: relative;
             flex-grow: 1;
             overflow: hidden;
-            background-color: #000000; 
+            background-color: #000000;
             margin: 4px;
             border: 3px solid;
-            border-color: #808080 #ffffff #ffffff #808080; 
+            border-color: #808080 #ffffff #ffffff #808080;
         }
 
         .terminal-body {
@@ -121,7 +121,7 @@
 
         .line {
             word-wrap: break-word;
-            color: #c0c0c0; 
+            color: #c0c0c0;
             font-size: 20px;
             line-height: 20px;
             margin-bottom: 4px;
@@ -130,21 +130,21 @@
         [class*="cmd-color-"] .line,
         [class*="cmd-color-"] .prefix,
         [class*="cmd-color-"] .text,
-        [class*="cmd-color-"] .system-log { 
-            color: inherit !important; 
+        [class*="cmd-color-"] .system-log {
+            color: inherit !important;
         }
 
-        .user { color: #00ff00; font-weight: normal; } 
-        .prefix { color: #ffffff; } 
+        .user { color: #00ff00; font-weight: normal; }
+        .prefix { color: #ffffff; }
         .text { color: #ffffff; }
-        .system-log { color: #ffffff; } 
+        .system-log { color: #ffffff; }
         .system-error { color: #ff5555; }
 
         .cursor {
             display: inline-block;
             width: 8px;
             height: 15px;
-            background-color: currentColor; 
+            background-color: currentColor;
             margin-left: 1px;
             vertical-align: bottom;
             animation: blink 1s infinite;
@@ -161,13 +161,13 @@
             width: 100%;
             height: calc(100% - 28px);
             z-index: 10;
-            pointer-events: none; 
+            pointer-events: none;
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
         }
 
         .emote {
-            height: 1.2em; 
+            height: 1.2em;
             vertical-align: middle;
             margin: 0 2px;
             image-rendering: pixelated;
@@ -238,15 +238,81 @@
     const termContainer = document.getElementById('termContainer');
     const matrixCanvas = document.getElementById('matrixCanvas');
     const ctx = matrixCanvas.getContext('2d');
-    const MAX_LINES = 35; 
+    const MAX_LINES = 35;
+    const MAX_MESSAGE_LENGTH = 500;
+    const ALLOWED_EMOTE_HOSTS = new Set([
+        'static-cdn.jtvnw.net',
+        'cdn.7tv.app',
+        'cdn.betterttv.net',
+        'cdn.frankerfacez.com'
+    ]);
     let matrixInterval = null;
     let isMatrixRunning = false;
-    let originalTerminalHTML = "";
-    let ws = null; 
+    let matrixSnapshotLines = [];
+    let ws = null;
 
     const block = ['cd', 'md', 'mkdir', 'del', 'erase', 'copy', 'move', 'ren', 'rename', 'format', 'shutdown', 'exit', 'help'];
-
     const alphabet = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890*#$@%&'.split('');
+
+    function safeColor(value, fallback = '#00ff00') {
+        if (typeof value !== 'string') return fallback;
+        const trimmed = value.trim();
+        return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
+    }
+
+    function safePlatform(value) {
+        if (typeof value !== 'string') return 'stream';
+        const cleaned = value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+        return cleaned || 'stream';
+    }
+
+    function isSafeEmoteUrl(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+        try {
+            const parsed = new URL(rawUrl.trim());
+            if (parsed.protocol !== 'https:') return false;
+            if (parsed.username || parsed.password) return false;
+            return ALLOWED_EMOTE_HOSTS.has(parsed.hostname);
+        } catch {
+            return false;
+        }
+    }
+
+    function appendTextWithLineBreaks(containerEl, text) {
+        const lines = String(text).split('\n');
+        lines.forEach((part, idx) => {
+            if (idx > 0) containerEl.appendChild(document.createElement('br'));
+            containerEl.appendChild(document.createTextNode(part));
+        });
+    }
+
+    function renderMessageContent(targetSpan, data) {
+        targetSpan.textContent = '';
+
+        if (Array.isArray(data.segments) && data.segments.length > 0) {
+            const frag = document.createDocumentFragment();
+            for (const seg of data.segments) {
+                if (!seg || typeof seg !== 'object') continue;
+                if (seg.type === 'text' && typeof seg.value === 'string') {
+                    frag.appendChild(document.createTextNode(seg.value.slice(0, MAX_MESSAGE_LENGTH)));
+                } else if (seg.type === 'emote' && isSafeEmoteUrl(seg.url)) {
+                    const img = document.createElement('img');
+                    img.className = 'emote';
+                    img.src = seg.url.trim();
+                    img.alt = typeof seg.name === 'string' ? seg.name : 'emote';
+                    img.loading = 'lazy';
+                    frag.appendChild(img);
+                }
+            }
+            targetSpan.appendChild(frag);
+            return;
+        }
+
+        const fallbackText = typeof data.text === 'string'
+            ? data.text.slice(0, MAX_MESSAGE_LENGTH)
+            : '';
+        targetSpan.textContent = fallbackText;
+    }
 
     function playTerminalBeep() {
         try {
@@ -265,11 +331,12 @@
     }
 
     function typeEffect(element, text, speed, callback) {
+        const safeText = String(text).slice(0, MAX_MESSAGE_LENGTH);
         let i = 0;
-        element.textContent = "";
+        element.textContent = '';
         function type() {
-            if (i < text.length) {
-                element.textContent += text.charAt(i);
+            if (i < safeText.length) {
+                element.textContent += safeText.charAt(i);
                 i++;
                 setTimeout(type, speed);
             } else if (callback) {
@@ -285,7 +352,7 @@
 
         const lines = terminal.getElementsByClassName('line');
         if (lines.length === 0) return;
-        
+
         const lastLine = lines[lines.length - 1];
         const cursor = document.createElement('span');
         cursor.className = 'cursor';
@@ -301,12 +368,20 @@
         }
     }
 
+    function recordMatrixSnapshot(lineEl) {
+        if (!isMatrixRunning) return;
+        matrixSnapshotLines.push(lineEl.cloneNode(true));
+        if (matrixSnapshotLines.length > MAX_LINES) {
+            matrixSnapshotLines.splice(0, matrixSnapshotLines.length - MAX_LINES);
+        }
+    }
+
     function printPingRow(text, color = '#cccccc') {
         const line = document.createElement('div');
         line.className = 'line system-log';
-        line.style.color = color;
-        line.innerHTML = text;
-        
+        line.style.color = safeColor(color, '#cccccc');
+        appendTextWithLineBreaks(line, text);
+
         if (isMatrixRunning) {
             line.style.setProperty('color', '#00ff00', 'important');
             glitchElementImmediately(line);
@@ -315,28 +390,25 @@
         terminal.appendChild(line);
         cleanupOldLines();
         updateCursorPosition();
-        
-        if (isMatrixRunning) {
-            const cleanLine = document.createElement('div');
-            cleanLine.className = 'line system-log';
-            cleanLine.style.color = color;
-            cleanLine.innerHTML = text;
-            originalTerminalHTML += cleanLine.outerHTML;
-        }
+        recordMatrixSnapshot(line);
     }
 
     function runPingProcess() {
-        printPingRow('<br>Pinging 127.0.0.1 with 32 bytes of data:');
+        printPingRow('\nPinging 127.0.0.1 with 32 bytes of data:');
         let repliesCount = 0;
         const replyInterval = setInterval(() => {
             repliesCount++;
             playTerminalBeep();
-            printPingRow('Reply from 127.0.0.1: bytes=32 time&lt;1ms TTL=128');
+            printPingRow('Reply from 127.0.0.1: bytes=32 time<1ms TTL=128');
             if (repliesCount === 4) {
                 clearInterval(replyInterval);
                 setTimeout(() => {
-                    const stats = `<br>Ping statistics for 127.0.0.1:<br>&nbsp;&nbsp;&nbsp;&nbsp;Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),<br>Approximate round trip times in milli-seconds:<br>&nbsp;&nbsp;&nbsp;&nbsp;Minimum = 0ms, Maximum = 0ms, Average = 0ms<br><br>`;
-                    printPingRow(stats); 
+                    const stats =
+                        '\nPing statistics for 127.0.0.1:\n' +
+                        '    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),\n' +
+                        'Approximate round trip times in milli-seconds:\n' +
+                        '    Minimum = 0ms, Maximum = 0ms, Average = 0ms\n\n';
+                    printPingRow(stats);
                 }, 1000);
             }
         }, 1000);
@@ -348,9 +420,9 @@
 
         const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
         let node;
-        while (node = walk.nextNode()) {
-            if (node.parentElement.className === 'cursor') continue;
-            let chars = node.nodeValue.split('');
+        while ((node = walk.nextNode())) {
+            if (node.parentElement && node.parentElement.classList.contains('cursor')) continue;
+            const chars = node.nodeValue.split('');
             for (let i = 0; i < chars.length; i++) {
                 if (chars[i] !== ' ' && chars[i] !== '\n' && chars[i] !== '\u00A0') {
                     chars[i] = alphabet[Math.floor(Math.random() * alphabet.length)];
@@ -367,8 +439,8 @@
         const textNodes = [];
         const walk = document.createTreeWalker(terminal, NodeFilter.SHOW_TEXT, null, false);
         let node;
-        
-        while (node = walk.nextNode()) {
+
+        while ((node = walk.nextNode())) {
             if (node.nodeValue.trim().length > 0) {
                 textNodes.push({
                     node: node,
@@ -380,11 +452,11 @@
 
         const images = terminal.querySelectorAll('img');
         let steps = 0;
-        const maxSteps = 30; 
+        const maxSteps = 30;
 
         const glitchInterval = setInterval(() => {
             steps++;
-            let progress = steps / maxSteps;
+            const progress = steps / maxSteps;
 
             images.forEach(img => {
                 if (direction === 'eat') {
@@ -401,14 +473,18 @@
                     if (direction === 'eat') {
                         if (Math.random() < progress) {
                             tData.current[i] = alphabet[Math.floor(Math.random() * alphabet.length)];
-                            tData.node.parentElement.style.setProperty('color', '#00ff00', 'important');
-                            tData.node.parentElement.style.textShadow = '0 0 5px rgba(0, 255, 0, 0.6)';
+                            if (tData.node.parentElement) {
+                                tData.node.parentElement.style.setProperty('color', '#00ff00', 'important');
+                                tData.node.parentElement.style.textShadow = '0 0 5px rgba(0, 255, 0, 0.6)';
+                            }
                         }
                     } else if (direction === 'restore') {
                         if (Math.random() < progress) {
                             tData.current[i] = tData.original[i];
-                            tData.node.parentElement.style.color = '';
-                            tData.node.parentElement.style.textShadow = '';
+                            if (tData.node.parentElement) {
+                                tData.node.parentElement.style.color = '';
+                                tData.node.parentElement.style.textShadow = '';
+                            }
                         } else {
                             tData.current[i] = alphabet[Math.floor(Math.random() * alphabet.length)];
                         }
@@ -420,7 +496,12 @@
             if (steps >= maxSteps) {
                 clearInterval(glitchInterval);
                 if (direction === 'restore') {
-                    terminal.innerHTML = originalTerminalHTML;
+                    terminal.textContent = '';
+                    const frag = document.createDocumentFragment();
+                    matrixSnapshotLines.forEach(el => frag.appendChild(el));
+                    terminal.appendChild(frag);
+                    cleanupOldLines();
+                    matrixSnapshotLines = [];
                 }
                 updateCursorPosition();
                 if (callback) callback();
@@ -430,13 +511,13 @@
 
     function runCanvasRain(duration, callback) {
         matrixCanvas.width = window.innerWidth;
-        matrixCanvas.height = window.innerHeight - 38;
+        matrixCanvas.height = window.innerHeight - 28;
         matrixCanvas.style.opacity = '0.35';
 
         const rainAlphabet = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890ABCDEF'.split('');
-        const fontSize = 24; 
-        const columns = matrixCanvas.width / fontSize;
-        const rainDrops = Array(Math.floor(columns)).fill(1);
+        const fontSize = 24;
+        const columns = Math.max(1, Math.floor(matrixCanvas.width / fontSize));
+        const rainDrops = Array(columns).fill(1);
 
         const draw = () => {
             ctx.fillStyle = 'rgba(12, 12, 12, 0.06)';
@@ -470,11 +551,13 @@
     function startMatrixEffect() {
         if (isMatrixRunning) return;
         isMatrixRunning = true;
-        
+
         const cursor = terminal.querySelector('.cursor');
         if (cursor) cursor.remove();
-        
-        originalTerminalHTML = terminal.innerHTML;
+
+        matrixSnapshotLines = Array.from(terminal.getElementsByClassName('line'))
+            .slice(-MAX_LINES)
+            .map(el => el.cloneNode(true));
 
         glitchTerminalText('eat', () => {
             runCanvasRain(3500, () => {
@@ -486,30 +569,44 @@
     }
 
     function clearConsoleLog() {
-        terminal.innerHTML = '';
+        terminal.textContent = '';
+        matrixSnapshotLines = [];
         const line = document.createElement('div');
         line.className = 'line system-log';
-        line.innerHTML = `<span class="prefix">C:\\system&gt;</span> Console buffer cleared. Done.`;
+        const prefix = document.createElement('span');
+        prefix.className = 'prefix';
+        prefix.textContent = 'C:\\system> ';
+        line.append(prefix, document.createTextNode('Console buffer cleared. Done.'));
         terminal.appendChild(line);
         updateCursorPosition();
     }
 
     function initWebSocket() {
-        ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const widgetName = window.location.pathname.split('/').filter(Boolean).pop() || '';
+        ws = new WebSocket(`${protocol}//${window.location.host}/widget/${encodeURIComponent(widgetName)}/ws`);
 
         ws.onmessage = function(event) {
-            const packet = JSON.parse(event.data);
-            
-            if (packet.topic.endsWith(':message')) {
-                const data = packet.data;
-                const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
-                const hasPermission = data.isMod === true; 
+            let packet;
+            try {
+                packet = JSON.parse(event.data);
+            } catch {
+                return;
+            }
 
-                const words = data.text.trim().split(/\s+/);
-                const firstWord = words[0].toLowerCase();
+            if (!packet || typeof packet !== 'object' || typeof packet.topic !== 'string') return;
+            const data = packet.data && typeof packet.data === 'object' ? packet.data : {};
+
+            if (packet.topic.endsWith(':message')) {
+                const rawText = typeof data.text === 'string' ? data.text.slice(0, MAX_MESSAGE_LENGTH) : '';
+                const messageText = rawText.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
+                const hasPermission = data.isMod === true;
+
+                const words = rawText.trim().split(/\s+/).filter(Boolean);
+                const firstWord = words[0] ? words[0].toLowerCase() : '';
                 playTerminalBeep();
 
-                let isBlockedCommand = block.includes(firstWord);
+                const isBlockedCommand = block.includes(firstWord);
 
                 if (hasPermission) {
                     if (messageText === '/clear') {
@@ -524,46 +621,47 @@
 
                 const line = document.createElement('div');
                 line.className = 'line';
-                const platform = data.platform || 'stream';
-                const content = data.html_text || data.text; 
+                const platform = safePlatform(data.platform);
+                const safeUser = typeof data.user === 'string' && data.user.trim() ? data.user.trim() : 'anonymous';
 
-                line.innerHTML = `
-                    <span class="prefix">C:\\chat\\${platform}&gt;</span> 
-                    <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
-                    <span class="text">:: ${content}</span>
-                `;
+                const prefixSpan = document.createElement('span');
+                prefixSpan.className = 'prefix';
+                prefixSpan.textContent = `C:\\chat\\${platform}> `;
+
+                const userSpan = document.createElement('span');
+                userSpan.className = 'user';
+                userSpan.style.color = safeColor(data.color, '#00ff00');
+                userSpan.textContent = `[${safeUser}] `;
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'text';
+                textSpan.appendChild(document.createTextNode(':: '));
+                const contentSpan = document.createElement('span');
+                textSpan.appendChild(contentSpan);
+
+                line.append(prefixSpan, userSpan, textSpan);
 
                 if (isMatrixRunning) {
+                    renderMessageContent(contentSpan, data);
                     line.style.setProperty('color', '#00ff00', 'important');
-                    const subSpans = line.querySelectorAll('span');
-                    subSpans.forEach(s => s.style.setProperty('color', '#00ff00', 'important'));
-                    
+                    line.querySelectorAll('span').forEach(s => s.style.setProperty('color', '#00ff00', 'important'));
                     glitchElementImmediately(line);
 
                     terminal.appendChild(line);
                     cleanupOldLines();
                     updateCursorPosition();
-
-                    const cleanLine = document.createElement('div');
-                    cleanLine.className = 'line';
-                    cleanLine.innerHTML = `
-                        <span class="prefix">C:\\chat\\${platform}&gt;</span> 
-                        <span class="user" style="color: ${data.color || '#00ff00'}">[${data.user}]</span> 
-                        <span class="text">:: ${content}</span>
-                    `;
-                    originalTerminalHTML += cleanLine.outerHTML;
+                    recordMatrixSnapshot(line);
                 } else {
                     terminal.appendChild(line);
                     cleanupOldLines();
                     updateCursorPosition();
 
-                    const textSpan = line.querySelector('.text');
-                    typeEffect(textSpan, ":: " + data.text, 10, () => {
-                        textSpan.innerHTML = ":: " + content;
+                    typeEffect(contentSpan, rawText, 10, () => {
+                        renderMessageContent(contentSpan, data);
                         updateCursorPosition();
 
                         if (isBlockedCommand) {
-                            printPingRow(`'${words[0]}' is not recognized as an internal or external command,<br>operable program or batch file.`);
+                            printPingRow(`'${words[0] || ''}' is not recognized as an internal or external command,\noperable program or batch file.`);
                             return;
                         }
 
@@ -575,46 +673,45 @@
 
                 if (!isBlockedCommand) {
                     if (messageText === 'dir') {
-                        printPingRow('Directory of C:\\stream<br>08.07.2026  04:24    &lt;DIR&gt;          logs<br>08.07.2026  04:24    1,048,576      stream_data.db<br>1 File(s)  1,048,576 bytes');
+                        printPingRow('Directory of C:\\stream\n08.07.2026  04:24    <DIR>          logs\n08.07.2026  04:24    1,048,576      stream_data.db\n1 File(s)  1,048,576 bytes');
                     } else if (messageText === 'ipconfig') {
-                        printPingRow('Ethernet adapter Ethernet:<br>   IPv4 Address. . . . . : 192.168.1.137<br>   Subnet Mask . . . . : 255.255.255.0');
+                        printPingRow('Ethernet adapter Ethernet:\n   IPv4 Address. . . . . : 192.168.1.137\n   Subnet Mask . . . . : 255.255.255.0');
                     } else if (messageText === 'systeminfo') {
-                        printPingRow('OS Name: StreamOS 2026<br>Processor: Core_i9_Virtual<br>System Uptime: 42 days');
+                        printPingRow('OS Name: StreamOS 2026\nProcessor: Core_i9_Virtual\nSystem Uptime: 42 days');
                     } else if (messageText === 'whoami') {
                         printPingRow('stream_user');
                     } else if (messageText === 'tasklist') {
-                        printPingRow('Image Name                     PID Session Name<br>========================= ======== ================<br>OBS.exe                       4320 Console<br>TwitchBot.exe                 1240 Console<br>HackingEngine.exe              890 Console');
+                        printPingRow('Image Name                     PID Session Name\n========================= ======== ================\nOBS.exe                       4320 Console\nTwitchBot.exe                 1240 Console\nHackingEngine.exe              890 Console');
                     } else if (messageText === 'tree') {
-                        printPingRow('C:\\stream<br>├── logs<br>├── overlay<br>└── modules');
-                    } else if ((firstWord === 'color') && hasPermission) {
+                        printPingRow('C:\\stream\n├── logs\n├── overlay\n└── modules');
+                    } else if (firstWord === 'color' && hasPermission) {
                         const arg = words[1] ? words[1].toLowerCase() : '';
-                        
-                        termContainer.className = 'terminal-container'; 
-                        
+                        termContainer.className = 'terminal-container';
+
                         if (arg === '') {
                             termContainer.classList.add('cmd-color-f');
-                            printPingRow('<br>Console colors have been reset to default.');
+                            printPingRow('\nConsole colors have been reset to default.');
                         } else if (arg.length === 2 && /^[0-f]{2}$/.test(arg)) {
                             const bgAttr = arg.charAt(0);
                             const textAttr = arg.charAt(1);
-                            
+
                             if (bgAttr === textAttr) {
-                                printPingRow('<br>Error: Text and background colors must not be the same.');
+                                printPingRow('\nError: Text and background colors must not be the same.');
                             } else {
                                 termContainer.classList.add(`cmd-bg-${bgAttr}`);
                                 termContainer.classList.add(`cmd-color-${textAttr}`);
                             }
                         } else if (arg.length === 1 && /^[0-f]$/.test(arg)) {
-                            termContainer.classList.add(`cmd-bg-0`);
+                            termContainer.classList.add('cmd-bg-0');
                             termContainer.classList.add(`cmd-color-${arg}`);
                         } else {
-                            printPingRow('<br>Error: Invalid attribute. Use "color 3" or "color 0A"');
+                            printPingRow('\nError: Invalid attribute. Use "color 3" or "color 0A"');
                         }
                     }
                 }
             }
-            
-            if (packet.topic.endsWith(':clear') || (packet.data && packet.data.text === "system clear")) {
+
+            if (packet.topic.endsWith(':clear') || data.text === 'system clear') {
                 clearConsoleLog();
             }
         };
@@ -624,37 +721,41 @@
         const header = document.createElement('div');
         header.className = 'line system-log';
         header.style.marginBottom = '30px';
-        header.innerHTML = `Microsoft(R) Windows WT(TM)<br>(c) Copyright 1985-1996 Microsoft Corp.`;
+        appendTextWithLineBreaks(header, 'Microsoft(R) Windows WT(TM)\n(c) Copyright 1985-1996 Microsoft Corp.');
         terminal.appendChild(header);
 
         setTimeout(() => {
             const line1 = document.createElement('div');
             line1.className = 'line system-log';
-            line1.innerHTML = `<span class="prefix">C:\\FunnyStreamTools&gt;</span> <span class="cmd-text"></span>`;
+            const prefix1 = document.createElement('span');
+            prefix1.className = 'prefix';
+            prefix1.textContent = 'C:\\FunnyStreamTools> ';
+            const textSpan1 = document.createElement('span');
+            textSpan1.className = 'cmd-text';
+            line1.append(prefix1, textSpan1);
             terminal.appendChild(line1);
             updateCursorPosition();
 
-            const textSpan1 = line1.querySelector('.cmd-text');
             typeEffect(textSpan1, 'boot --init', 80, () => {
                 playTerminalBeep();
                 updateCursorPosition();
 
                 const line2 = document.createElement('div');
                 line2.className = 'line system-log';
-                line2.innerHTML = `connecting to CoreEngine via WebSocket...`;
+                line2.textContent = 'connecting to CoreEngine via WebSocket...';
                 terminal.appendChild(line2);
                 updateCursorPosition();
 
                 setTimeout(() => {
                     const successLine = document.createElement('div');
                     successLine.className = 'line system-log';
-                    successLine.innerHTML = `SUCCESS: Connected to EventBus active context.`;
+                    successLine.textContent = 'SUCCESS: Connected to EventBus active context.';
                     terminal.appendChild(successLine);
                     playTerminalBeep();
                     updateCursorPosition();
 
                     initWebSocket();
-                }, 1500); 
+                }, 1500);
             });
         }, 500);
     }
@@ -664,7 +765,7 @@
     window.addEventListener('resize', () => {
         if (isMatrixRunning) {
             matrixCanvas.width = window.innerWidth;
-            matrixCanvas.height = window.innerHeight - 38;
+            matrixCanvas.height = window.innerHeight - 28;
         }
     });
 </script>

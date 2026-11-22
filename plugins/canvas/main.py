@@ -1,16 +1,19 @@
-import os
-import uuid
-import random
 import asyncio
-from fastapi import WebSocket, WebSocketDisconnect, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+import os
+import random
+import uuid
+
+import aiofiles
+from fastapi import File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
 from app.baseplugin import BasePlugin
 from app.main import engine
 
 PRESENCE_COLORS = ["#5865F2", "#57F287", "#FEE75C", "#ED4245", "#EB459E", "#3BA55D", "#FAA61A", "#45DDEB"]
 
 class MemeCanvasPlugin(BasePlugin):
-    def __init__(self, name: str, prefix: str, bus, subscribed_topics: list = None, **kwargs): # type: ignore
+    def __init__(self, name: str, prefix: str, bus, subscribed_topics: list | None = None, **kwargs): 
         self.plugin_dir = os.path.dirname(__file__)
 
         self.trigger_topics = [
@@ -35,13 +38,13 @@ class MemeCanvasPlugin(BasePlugin):
 
         @self.router.get("/admin", response_class=HTMLResponse)
         async def get_admin_panel():
-            with open(sender_path, "r", encoding="utf-8") as f:
-                return f.read()
+            async with aiofiles.open(sender_path, "r", encoding="utf-8") as f:
+                return await f.read()
 
         @self.router.get("/widget", response_class=HTMLResponse)
         async def get_obs_widget():
-            with open(index_path, "r", encoding="utf-8") as f:
-                return f.read()
+            async with aiofiles.open(index_path, "r", encoding="utf-8") as f:
+                return await f.read()
 
         @self.router.get("/file/{filename}")
         async def get_uploaded_file(filename: str):
@@ -68,8 +71,8 @@ class MemeCanvasPlugin(BasePlugin):
                 unique_filename = f"{uuid.uuid4()}{file_extension}"
                 file_path = os.path.join(self.upload_dir, unique_filename)
                 
-                with open(file_path, "wb") as f:
-                    f.write(await file.read())
+                async with aiofiles.open(file_path, "wb") as f:
+                    await f.write(await file.read())
                 
                 file_url = f"file/{unique_filename}"
                 
@@ -113,11 +116,11 @@ class MemeCanvasPlugin(BasePlugin):
                             "event_type": topic,
                             "raw_payload": event_data.get("data"),
                         }))
-                    return None
+                    return
 
                 clean_data = self.handle_payload(event_data)
                 asyncio.create_task(async_broadcast(clean_data))
-                return None
+                return
 
             for topic in self.subscribed_topics:
                 await self.bus.subscribe(topic, websocket, event_bus_bridge)

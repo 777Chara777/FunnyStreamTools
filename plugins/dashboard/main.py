@@ -1,8 +1,8 @@
 import os
-from fastapi import Request
-from fastapi.responses import JSONResponse
+
 from app.baseplugin import BasePlugin
 from app.eventbus import EventBus
+
 
 class DashboardPlugin(BasePlugin):
     def __init__(self, name: str, prefix: str, bus: EventBus, subscribed_topics: list, **kwargs):

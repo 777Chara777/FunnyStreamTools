@@ -1,4 +1,5 @@
-from typing import Callable, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from eventbus import EventBus
@@ -6,7 +7,7 @@ if TYPE_CHECKING:
 class BaseProvider:
     def __init__(self, provider_id: str, bus, **kwargs):
         self.provider_id = provider_id
-        self.bus: "EventBus" = bus
+        self.bus: EventBus = bus
         self.running = True
 
     async def start(self):

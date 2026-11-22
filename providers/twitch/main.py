@@ -1,14 +1,52 @@
-import re
+import asyncio
+import html
 import os
 import random
-import asyncio
+import re
+
 import websockets
+
 from app.baseprovider import BaseProvider
+
+# Fix XSS Attack
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 class TwitchProvider(BaseProvider):
     def get_random_color(self) -> str:
         """Gen funny hex-color"""
         return "#" + "".join(random.choices("456789ABCDEF", k=6))
+
+    def _sanitize_color(self, color: str | None) -> str:
+        if color and HEX_COLOR_RE.match(color):
+            return color
+        return self.get_random_color()
+
+    def _build_safe_html_text(self, message_text: str, emotes_raw: str) -> str:
+        _ = emotes_raw
+        return html.escape(message_text, quote=True)
+
+    def _build_payload(
+        self,
+        username: str,
+        message_text: str,
+        emotes_raw: str,
+        user_color: str | None,
+        is_mod: bool,
+    ) -> dict:
+        safe_user = str(username)
+        safe_text = str(message_text)
+        safe_emotes_raw = str(emotes_raw)
+        safe_color = self._sanitize_color(user_color)
+
+        return {
+            "user": safe_user,
+            "text": safe_text,
+            "html_text": self._build_safe_html_text(safe_text, safe_emotes_raw),
+            "emotes_raw": safe_emotes_raw,
+            "platform": "twitch",
+            "color": safe_color,
+            "isMod": bool(is_mod),
+        }
     
     async def start(self):
         uri = "wss://irc-ws.chat.twitch.tv:443"
@@ -59,14 +97,13 @@ class TwitchProvider(BaseProvider):
                                     emotes_match = re.search(r"emotes=([^;]+)", tags_raw)
                                     emotes_raw = emotes_match.group(1) if emotes_match else ""
 
-                                    payload = {
-                                        "user": username,
-                                        "text": message_text,
-                                        "emotes_raw": emotes_raw, 
-                                        "platform": "twitch",
-                                        "color": user_color,
-                                        "isMod": is_mod
-                                    }
+                                    payload = self._build_payload(
+                                        username=username,
+                                        message_text=message_text,
+                                        emotes_raw=emotes_raw,
+                                        user_color=user_color,
+                                        is_mod=is_mod,
+                                    )
                                     
                                     await self.emit("message", payload)
 

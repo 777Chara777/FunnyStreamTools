@@ -10,7 +10,7 @@
             padding: 0;
         }
         body {
-            background-color: transparent; 
+            background-color: transparent;
             font-family: 'Consolas', 'Courier New', Courier, monospace;
             overflow: hidden;
             height: 100vh;
@@ -88,11 +88,10 @@
 
         .line {
             word-wrap: break-word;
-            color: #c5cdd8; 
-            font-size: 22px; 
+            color: #c5cdd8;
+            font-size: 22px;
             margin-bottom: 6px;
             position: relative;
-            /* white-space: pre-wrap; */
         }
 
         .prompt-bracket { color: #4c566a; }
@@ -100,14 +99,14 @@
         .prompt-host { color: #1793d1; font-weight: bold; }
         .prompt-dir { color: #e5e9f0; }
         .text { color: #c5cdd8; }
-        .system-log { color: #79828c; } 
+        .system-log { color: #79828c; }
         .system-error { color: #ff5555; font-weight: bold; }
 
         .cursor {
             display: inline-block;
             width: 12px;
             height: 22px;
-            background-color: #1793d1; 
+            background-color: #1793d1;
             margin-left: 4px;
             vertical-align: middle;
             animation: blink 1s infinite;
@@ -118,7 +117,7 @@
         }
 
         .emote {
-            height: 1.2em; 
+            height: 1.2em;
             vertical-align: middle;
             margin: 0 2px;
         }
@@ -138,17 +137,86 @@
 
     <div class="terminal-container">
         <div class="terminal-body" id="terminal">
-            <div class="line system-log" style="margin-bottom: 20px;">Arch Linux 2026.07.08 (tty1)<br>Welcome to Arch Linux! (I use Arch btw)<br>Type 'pacman -Syu' or 'neofetch' to begin.<br></div>
+            <div class="line system-log" id="bootHeader" style="margin-bottom: 20px;"></div>
         </div>
     </div>
 </div>
 
 <script>
     const terminal = document.getElementById('terminal');
-    const MAX_LINES = 50; 
-    let isShowing = false;
+    const MAX_LINES = 50;
+    const MAX_MESSAGE_LENGTH = 500;
+    const ALLOWED_EMOTE_HOSTS = new Set([
+        'static-cdn.jtvnw.net',
+        'cdn.7tv.app',
+        'cdn.betterttv.net',
+        'cdn.frankerfacez.com'
+    ]);
 
     const block = ['ls', 'cd', 'rm', 'clear', 'top', 'neofetch', 'sudo', 'ping', 'pacman', 'yay'];
+
+    function safeColor(value, fallback = '#1793d1') {
+        if (typeof value !== 'string') return fallback;
+        const trimmed = value.trim();
+        return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
+    }
+
+    function isSafeEmoteUrl(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+        try {
+            const parsed = new URL(rawUrl.trim());
+            if (parsed.protocol !== 'https:') return false;
+            if (parsed.username || parsed.password) return false;
+            return ALLOWED_EMOTE_HOSTS.has(parsed.hostname);
+        } catch {
+            return false;
+        }
+    }
+
+    function appendLines(containerEl, linesArray) {
+        linesArray.forEach((entry, idx) => {
+            if (idx > 0) {
+                containerEl.appendChild(document.createElement('br'));
+            }
+            if (typeof entry === 'string') {
+                containerEl.appendChild(document.createTextNode(entry));
+                return;
+            }
+            const span = document.createElement('span');
+            if (entry.className) span.className = entry.className;
+            if (entry.color) span.style.color = safeColor(entry.color, '#c5cdd8');
+            span.textContent = entry.text || '';
+            containerEl.appendChild(span);
+        });
+    }
+
+    function renderMessageContent(targetSpan, data) {
+        targetSpan.textContent = '';
+
+        if (Array.isArray(data.segments) && data.segments.length > 0) {
+            const frag = document.createDocumentFragment();
+            for (const seg of data.segments) {
+                if (!seg || typeof seg !== 'object') continue;
+                if (seg.type === 'text' && typeof seg.value === 'string') {
+                    frag.appendChild(document.createTextNode(seg.value.slice(0, MAX_MESSAGE_LENGTH)));
+                } else if (seg.type === 'emote' && isSafeEmoteUrl(seg.url)) {
+                    const img = document.createElement('img');
+                    img.className = 'emote';
+                    img.src = seg.url.trim();
+                    img.alt = typeof seg.name === 'string' ? seg.name : 'emote';
+                    img.loading = 'lazy';
+                    frag.appendChild(img);
+                }
+            }
+            targetSpan.appendChild(frag);
+            return;
+        }
+
+        const fallbackText = typeof data.text === 'string'
+            ? data.text.slice(0, MAX_MESSAGE_LENGTH)
+            : '';
+        targetSpan.textContent = fallbackText;
+    }
 
     function playTerminalBeep() {
         try {
@@ -167,11 +235,12 @@
     }
 
     function typeEffect(element, text, speed, callback) {
+        const safeText = String(text).slice(0, MAX_MESSAGE_LENGTH);
         let i = 0;
-        element.textContent = "";
+        element.textContent = '';
         function type() {
-            if (i < text.length) {
-                element.textContent += text.charAt(i);
+            if (i < safeText.length) {
+                element.textContent += safeText.charAt(i);
                 i++;
                 setTimeout(type, speed);
             } else if (callback) {
@@ -187,7 +256,7 @@
 
         const lines = terminal.getElementsByClassName('line');
         if (lines.length === 0) return;
-        
+
         const lastLine = lines[lines.length - 1];
         const cursor = document.createElement('span');
         cursor.className = 'cursor';
@@ -203,93 +272,132 @@
         }
     }
 
-    function printCommandOutput(text, color = '#c5cdd8') {
+    function printCommandOutput(linesArray, color = '#c5cdd8') {
         const line = document.createElement('div');
         line.className = 'line system-log';
-        line.style.color = color;
-        line.innerHTML = text;
-        
+        line.style.color = safeColor(color, '#c5cdd8');
+        if (Array.isArray(linesArray)) {
+            appendLines(line, linesArray);
+        } else {
+            appendLines(line, String(linesArray).split('\n'));
+        }
+
         terminal.appendChild(line);
         cleanupOldLines();
         updateCursorPosition();
     }
 
     function runPingProcess() {
-        printCommandOutput('PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.');
+        printCommandOutput(['PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.']);
         let count = 0;
         const pingInterval = setInterval(() => {
             count++;
             playTerminalBeep();
-            printCommandOutput(`64 bytes from 127.0.0.1: icmp_seq=${count} ttl=64 time=0.018 ms`);
+            printCommandOutput([`64 bytes from 127.0.0.1: icmp_seq=${count} ttl=64 time=0.018 ms`]);
             if (count === 4) {
                 clearInterval(pingInterval);
                 setTimeout(() => {
-                    printCommandOutput(`--- 127.0.0.1 ping statistics ---<br>4 packets transmitted, 4 received, 0% packet loss, time 2999ms<br>rtt min/avg/max/mdev = 0.018/0.022/0.028/0.003 ms<br>`); 
+                    printCommandOutput([
+                        '--- 127.0.0.1 ping statistics ---',
+                        '4 packets transmitted, 4 received, 0% packet loss, time 2999ms',
+                        'rtt min/avg/max/mdev = 0.018/0.022/0.028/0.003 ms',
+                        ''
+                    ]);
                 }, 500);
             }
         }, 1000);
     }
 
     function runTopProcess() {
-        printCommandOutput('Reading /proc filesystem...');
+        printCommandOutput(['Reading /proc filesystem...']);
         setTimeout(() => {
             const cpuUsage = (Math.random() * 15 + 2).toFixed(1);
             const ramUsage = (Math.random() * 3 + 4).toFixed(2);
-            const topData = `
-<b>top - 15:42:01 up 12 days, 22:11,  1 user,  load average: 0.11, 0.14, 0.05</b><br>
-Tasks: <b>210 total</b>,   1 running, 209 sleeping,   0 stopped,   0 zombie<br>
-%Cpu(s): <b>${cpuUsage} us</b>,  1.0 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi<br>
-MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  9120.4 buff/cache<br>
-
-  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND<br>
- 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.8).toFixed(1)}   2.8   4:11.23 OBS.exe<br>
- 1240 bot_user  20   0  842104  64120  24104 S   0.3   0.2   0:45.10 TwitchBot.exe<br>
-  915 arch_usr  20   0  112400  10120   3900 R   0.2   0.0   0:01.05 top<br>`;
-            printCommandOutput(topData, '#81a1c1');
+            printCommandOutput([
+                `top - 15:42:01 up 12 days, 22:11,  1 user,  load average: 0.11, 0.14, 0.05`,
+                `Tasks: 210 total,   1 running, 209 sleeping,   0 stopped,   0 zombie`,
+                `%Cpu(s): ${cpuUsage} us,  1.0 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi`,
+                `MiB Mem : 32768.0 total,  18402.1 free,  ${ramUsage} GB used,  9120.4 buff/cache`,
+                ``,
+                `  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND`,
+                ` 4320 streamer  20   0 4825104 924104 124512 S   ${(cpuUsage * 0.8).toFixed(1)}   2.8   4:11.23 OBS.exe`,
+                ` 1240 bot_user  20   0  842104  64120  24104 S   0.3   0.2   0:45.10 TwitchBot.exe`,
+                `  915 arch_usr  20   0  112400  10120   3900 R   0.2   0.0   0:01.05 top`
+            ], '#81a1c1');
         }, 800);
     }
 
     function runNeofetch() {
-        const neofetchData = `
-    <pre style="font-family: monospace; margin: 0; background: transparent; color: inherit;">
-    <span style="color: #1793d1; font-weight: bold;">       /\\         </span>   <b>streamer</b>@<b>archlinux</b>
-    <span style="color: #1793d1; font-weight: bold;">      /  \\        </span>   -------------------
-    <span style="color: #1793d1; font-weight: bold;">     /\\   \\       </span>   <b>OS</b>: Arch Linux x86_64
-    <span style="color: #1793d1; font-weight: bold;">    /  __  \\      </span>   <b>Host</b>: Custom Stream-Rig
-    <span style="color: #1793d1; font-weight: bold;">   /  (  )  \\     </span>   <b>Kernel</b>: 6.9.5-arch1-1
-    <span style="color: #1793d1; font-weight: bold;">  /  _    _  \\    </span>   <b>Uptime</b>: 12 days, 22 hours, 11 mins
-    <span style="color: #1793d1; font-weight: bold;"> /  (______)  \\   </span>   <b>Shell</b>: bash 5.2.26
-    <span style="color: #1793d1; font-weight: bold;">/              \\  </span>   <b>CPU</b>: AMD Ryzen 9 7950X3D (32) @ 5.70GHz
-                         <b>GPU</b>: NVIDIA GeForce RTX 5090 Ti
-                         <b>Memory</b>: 6114MiB / 32768MiB
-    </pre>
-    `;
-        printCommandOutput(neofetchData);
-    }
-
-    function runPacmanSyu() {
-        printCommandOutput(':: Synchronizing package databases...<br> core is up to date<br> extra is up to date<br>:: Starting full system upgrade...<br> there is nothing to do');
-    }
-
-    function clearConsoleLog() {
-        terminal.innerHTML = '';
+        const line = document.createElement('div');
+        line.className = 'line system-log';
+        const pre = document.createElement('pre');
+        pre.style.fontFamily = 'monospace';
+        pre.style.margin = '0';
+        pre.style.background = 'transparent';
+        pre.style.color = 'inherit';
+        pre.textContent = [
+            '       /\\          streamer@archlinux',
+            '      /  \\         -------------------',
+            '     /\\   \\        OS: Arch Linux x86_64',
+            '    /  __  \\       Host: Custom Stream-Rig',
+            '   /  (  )  \\      Kernel: 6.9.5-arch1-1',
+            '  /  _    _  \\     Uptime: 12 days, 22 hours, 11 mins',
+            ' /  (______)  \\    Shell: bash 5.2.26',
+            '/              \\   CPU: AMD Ryzen 9 7950X3D (32) @ 5.70GHz',
+            '                   GPU: NVIDIA GeForce RTX 5090 Ti',
+            '                   Memory: 6114MiB / 32768MiB'
+        ].join('\n');
+        line.appendChild(pre);
+        terminal.appendChild(line);
+        cleanupOldLines();
         updateCursorPosition();
     }
 
-    const ws = new WebSocket(`ws://${window.location.host}/widget/${window.location.pathname.split('/').pop()}/ws`);
+    function runPacmanSyu() {
+        printCommandOutput([
+            ':: Synchronizing package databases...',
+            ' core is up to date',
+            ' extra is up to date',
+            ':: Starting full system upgrade...',
+            ' there is nothing to do'
+        ]);
+    }
+
+    function clearConsoleLog() {
+        terminal.textContent = '';
+        updateCursorPosition();
+    }
+
+    const bootHeader = document.getElementById('bootHeader');
+    appendLines(bootHeader, [
+        'Arch Linux 2026.07.08 (tty1)',
+        'Welcome to Arch Linux! (I use Arch btw)',
+        "Type 'pacman -Syu' or 'neofetch' to begin.",
+        ''
+    ]);
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const widgetName = window.location.pathname.split('/').filter(Boolean).pop() || '';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/widget/${encodeURIComponent(widgetName)}/ws`);
 
     ws.onmessage = function(event) {
-        const packet = JSON.parse(event.data);
-        
-        if (packet.topic && packet.topic.endsWith(':message')) {
-            const data = packet.data;
-            const messageText = data.text.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
-            const hasPermission = data.isMod === true; 
+        let packet;
+        try {
+            packet = JSON.parse(event.data);
+        } catch {
+            return;
+        }
 
-            const words = data.text.trim().split(/\s+/);
-            const firstWord = words[0].toLowerCase();
+        if (packet && typeof packet.topic === 'string' && packet.topic.endsWith(':message')) {
+            const data = packet.data && typeof packet.data === 'object' ? packet.data : {};
+            const rawText = typeof data.text === 'string' ? data.text.slice(0, MAX_MESSAGE_LENGTH) : '';
+            const messageText = rawText.trim().toLowerCase().replace(/[\p{Cf}]/gu, '');
+            const hasPermission = data.isMod === true;
+
+            const words = rawText.trim().split(/\s+/).filter(Boolean);
+            const firstWord = words[0] ? words[0].toLowerCase() : '';
             const isSudo = firstWord === 'sudo';
-            
+
             let commandToCheck = firstWord;
             if (isSudo && words.length > 1) {
                 commandToCheck = words[1].toLowerCase();
@@ -304,29 +412,60 @@ MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  912
 
             const line = document.createElement('div');
             line.className = 'line';
-            const content = data.html_text || data.text; 
 
-            line.innerHTML = `
-                <span class="prompt-bracket">[</span><span class="prompt-user" style="color: ${data.color || '#1793d1'}">${data.user}</span><span class="prompt-at">@</span><span class="prompt-host">archlinux</span> <span class="prompt-dir">~</span><span class="prompt-bracket">]$</span> 
-                <span class="text">${content}</span>
-            `;
+            const b1 = document.createElement('span');
+            b1.className = 'prompt-bracket';
+            b1.textContent = '[';
 
+            const userSpan = document.createElement('span');
+            userSpan.className = 'prompt-user';
+            userSpan.style.color = safeColor(data.color, '#1793d1');
+            userSpan.textContent = typeof data.user === 'string' && data.user.trim() ? data.user.trim() : 'anonymous';
+
+            const atSpan = document.createElement('span');
+            atSpan.className = 'prompt-at';
+            atSpan.textContent = '@';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'prompt-host';
+            hostSpan.textContent = 'archlinux';
+
+            const dirSpan = document.createElement('span');
+            dirSpan.className = 'prompt-dir';
+            dirSpan.textContent = ' ~';
+
+            const b2 = document.createElement('span');
+            b2.className = 'prompt-bracket';
+            b2.textContent = ']$ ';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'text';
+
+            line.append(b1, userSpan, atSpan, hostSpan, dirSpan, b2, textSpan);
             terminal.appendChild(line);
             cleanupOldLines();
             updateCursorPosition();
 
-            const textSpan = line.querySelector('.text');
-            typeEffect(textSpan, data.text, 10, () => {
-                textSpan.innerHTML = content;
+            typeEffect(textSpan, rawText, 10, () => {
+                renderMessageContent(textSpan, data);
                 updateCursorPosition();
 
                 if (messageText.includes('rm -rf')) {
-                    printCommandOutput(`<span class="system-error">rm: cannot remove '/': Permission denied</span><br><span style="color: #1793d1">Btw, nice try. System safely protected! ⚡</span>`);
+                    printCommandOutput([
+                        { className: 'system-error', text: "rm: cannot remove '/': Permission denied" },
+                        { color: '#1793d1', text: 'Btw, nice try. System safely protected! ⚡' }
+                    ]);
                     return;
                 }
 
                 if (messageText === 'ls -la' || messageText === 'ls') {
-                    printCommandOutput(`total 24<br>drwxr-xr-x  3 arch arch 4096 Jul  8 15:00 .<br>drwxr-xr-x 19 root root 4096 Jul  8 15:00 ..<br>-rw-r--r--  1 arch arch 8192 stream_data.db<br>drwxr-xr-x  2 arch arch 4096 Jul  8 15:00 logs`);
+                    printCommandOutput([
+                        'total 24',
+                        'drwxr-xr-x  3 arch arch 4096 Jul  8 15:00 .',
+                        'drwxr-xr-x 19 root root 4096 Jul  8 15:00 ..',
+                        '-rw-r--r--  1 arch arch 8192 stream_data.db',
+                        'drwxr-xr-x  2 arch arch 4096 Jul  8 15:00 logs'
+                    ]);
                     return;
                 }
 
@@ -351,7 +490,9 @@ MiB Mem : <b>32768.0 total</b>,  18402.1 free,  <b>${ramUsage} GB used</b>,  912
 
                 const winBlock = ['dir', 'ipconfig', 'cls', 'systeminfo', 'mkdir'];
                 if (winBlock.includes(firstWord) || (block.includes(commandToCheck) && !hasPermission)) {
-                    printCommandOutput(`<span class="system-error">bash: ${words[0]}: command not found</span>`);
+                    printCommandOutput([
+                        { className: 'system-error', text: `bash: ${words[0] || ''}: command not found` }
+                    ]);
                 }
             });
         }

@@ -1,7 +1,5 @@
-import os
 
 from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
 
 from app.baseplugin import BasePlugin
 

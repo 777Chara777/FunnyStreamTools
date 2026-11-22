@@ -1,10 +1,5 @@
-import os
-import json
-import re
-import requests
 
 from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
 
 from app.baseplugin import BasePlugin
 

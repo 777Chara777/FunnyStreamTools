@@ -1,8 +1,12 @@
-import os
-import json
-import socket
 import asyncio
+import json
+import os
+import socket
+
+import aiofiles
+
 from app.baseprovider import BaseProvider
+
 
 class MemeCanvasProvider(BaseProvider):
     def __init__(self, provider_id: str, bus, **kwargs):
@@ -50,7 +54,7 @@ class MemeCanvasProvider(BaseProvider):
         elif t == 'save_scene':
             scene_name = data.get('scene_name', 'default_scene')
             file_path = os.path.join(self.scenes_dir, f"{scene_name}.json")
-            with open(file_path, "w", encoding="utf-8") as f:
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                 json.dump({
                     "state": self.canvas_state,
                     "bounds": self.canvas_bounds,
@@ -62,8 +66,9 @@ class MemeCanvasProvider(BaseProvider):
             scene_name = data.get('scene_name', 'default_scene')
             file_path = os.path.join(self.scenes_dir, f"{scene_name}.json")
             if os.path.exists(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    saved = json.load(f)
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                    saved = json.loads(content)
                     self.canvas_state = saved.get("state", {})
                     self.canvas_bounds = saved.get("bounds", self.canvas_bounds)
                     self.global_css = saved.get("global_css", "")
@@ -77,7 +82,7 @@ class MemeCanvasProvider(BaseProvider):
 
         elif t == 'external_trigger':
             trigger_event = data.get('event_type')
-            raw_payload = data.get('raw_payload')
+            # raw_payload = data.get('raw_payload')
             for obj in self.canvas_state.values():
                 if obj.get('trigger_target') == trigger_event:
                     obj['hidden'] = False
