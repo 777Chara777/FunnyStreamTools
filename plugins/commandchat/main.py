@@ -11,14 +11,15 @@ class CommandChatPlugin(BasePlugin):
         name: str,
         prefix: str,
         bus,
-        subscribed_topics: list,
+        subscribed_topics: list[str],
         **kwargs
     ):
+        topics = subscribed_topics or ["chatemoji:message"]
         super().__init__(
             name,
             prefix,
             bus,
-            ["chatemoji:message"],
+            topics,
             **kwargs
         )
 

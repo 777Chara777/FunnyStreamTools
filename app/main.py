@@ -24,14 +24,6 @@ if getattr(sys, 'frozen', False):
 logging.basicConfig(level=logging.DEBUG if IS_DEBUG else logging.INFO)
 logger = logging.getLogger("FunnyStreamTools")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await engine.start_providers()
-    yield
-    await engine.stop_providers()
-
-
-app = FastAPI(title="FunnyStreamTools", lifespan=lifespan)
 
 class FunnyStreamTools:
     def __init__(self, fastapi_app):
@@ -217,6 +209,15 @@ class FunnyStreamTools:
             print(f"[*] Starting a background process for the provider: {p_id}")
             task = asyncio.create_task(provider.start())
             self.background_tasks.append(task)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global engine
+    await engine.start_providers()
+    yield
+    await engine.stop_providers()
+
+app = FastAPI(title="FunnyStreamTools", lifespan=lifespan)
 
 engine = FunnyStreamTools(app)
 engine.load_all()
